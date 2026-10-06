@@ -1,0 +1,46 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+
+# JavaScript
+node_modules/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Tooling and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+
+# Local runtime data
+postgres-data/
+redis-data/
+tmp/
+uploads/
+
+# Infrastructure state and generated secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+secrets/
