@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 1 is complete: the product boundary, user workflows, acceptance criteria, architecture, risks, success measures, repository conventions, and 21-day delivery plan are documented. Runtime services begin on Day 3 after the domain model is designed on Day 2.
+Day 2 is complete: the product boundary and 21-day plan are documented, and a database-ready domain model now defines lifecycle rules, evidence relationships, indexes, retention assumptions, and core architecture decisions. Runtime services begin on Day 3.
 
 ## Users and least privilege
 
@@ -32,6 +32,8 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), and architecture decision records under `docs/decisions/` are the contract for the Day 3 schema foundation.
+
 ## Repository map
 
 ```text
@@ -53,10 +55,11 @@ Empty implementation directories contain `.gitkeep` files so the planned layout 
 
 ## Getting started today
 
-Day 1 has no application runtime or third-party dependencies. Validate the specification from PowerShell:
+There is not yet an application runtime or third-party dependency. Validate the completed documentation milestones from PowerShell:
 
 ```powershell
 ./scripts/validate-day-01.ps1
+./scripts/validate-day-02.ps1
 ```
 
 For future local development, copy `.env.example` to `.env` and replace the local-only placeholders. Day 3 will add the supported Docker Compose startup and quality-check commands. Do not use production secrets locally or commit `.env`.
@@ -77,6 +80,9 @@ For future local development, copy `.env.example` to `.env` and replace the loca
 - `PROGRESS.md` — current state, commands, results, issues, and next objective
 - `docs/PRODUCT_SPEC.md` — workflows, acceptance criteria, scope, metrics, and risks
 - `docs/architecture/OVERVIEW.md` — intended components, trust boundaries, data flow, and deployment shape
+- `docs/architecture/DATA_MODEL.md` — entities, constraints, lifecycles, indexes, and retention assumptions
+- `docs/architecture/ERD.md` — transaction-to-case relationship diagram
+- `docs/decisions/` — accepted decisions for money, identifiers, and audit history
 - `docs/operations/LOCAL_DEVELOPMENT.md` — current development environment and safety rules
 
 ## License and usage

@@ -13,7 +13,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day | Theme | Status |
 | ---: | --- | --- |
 | Day 1 | Product definition and repository creation | **Complete** |
-| Day 2 | Domain and data model | **Not started** |
+| Day 2 | Domain and data model | **Complete** |
 | Day 3 | Local platform foundation | **Not started** |
 | Day 4 | Authentication and role-based access | **Not started** |
 | Day 5 | Transaction ingestion | **Not started** |
@@ -50,7 +50,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 2 — Domain and data model
 
-**Status: Not started**
+**Status: Complete**
 
 - Model users, roles, accounts, transactions, settlements, ingestion batches, reconciliation runs, rules, alerts, cases, comments, and audit events.
 - Define lifecycle statuses, relationships, ownership, money precision, UTC timestamps, indexes, uniqueness, and retention assumptions.

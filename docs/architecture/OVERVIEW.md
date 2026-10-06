@@ -45,11 +45,12 @@ Modules may share one deployment and database but communicate through explicit s
 
 ## Data integrity conventions
 
-- Money will use Python `Decimal`, JSON decimal strings, and PostgreSQL `NUMERIC` with precision chosen in the Day 2 model. JavaScript will not calculate money with `number`; the interface will format server-provided decimal strings or use a decimal library where calculation is unavoidable.
-- Identifiers will be opaque and stable; identifier choice is finalized by a Day 2 ADR.
+- Money uses Python `Decimal`, JSON decimal strings, and PostgreSQL `NUMERIC(20,6)` as defined in [ADR-0001](../decisions/0001-decimal-money.md). JavaScript will not calculate money with `number`; the interface will format server-provided decimal strings or use a reviewed decimal library where calculation is unavoidable.
+- Domain and correlation identifiers use opaque UUIDv4 values as defined in [ADR-0002](../decisions/0002-identifiers.md). Source identifiers remain scoped to their account/source boundary.
 - Timestamps use timezone-aware UTC in Python and PostgreSQL. ISO 8601 API values carry `Z`/UTC offsets. The interface may convert to a configured display zone but must label it.
 - Critical uniqueness, lifecycle, and relationship rules exist in both application validation and database constraints.
 - Source records are not mutated to represent processing outcomes; outcomes and history are separately attributable.
+- Application audit history is append-only under the runtime database role as defined in [ADR-0003](../decisions/0003-append-only-audit-history.md).
 
 ## Security and trust boundaries
 
