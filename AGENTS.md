@@ -14,7 +14,8 @@ These instructions apply to the entire repository.
 - Complete exactly one roadmap day for each user command of `Next`.
 - Preserve user-authored and unexpected working-tree changes. Never reset, revert, or overwrite them.
 - Establish the day's acceptance criteria, inspect existing implementation, implement only that day's scope, add relevant tests, run appropriate checks, review the final diff, update project memory, and commit verified work.
-- Do not push, create remotes, publish releases, or deploy without explicit authorization.
+- Push completed work to the existing verified `origin` only after all relevant checks pass, the final diff is reviewed, and the working tree contains no accidental changes. Never push broken or unverified work.
+- Do not create or change remotes, publish releases, or deploy without explicit authorization.
 - Do not rewrite Git history or force-push.
 
 ## Commit standard
