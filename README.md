@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 2 is complete: the product boundary and 21-day plan are documented, and a database-ready domain model now defines lifecycle rules, evidence relationships, indexes, retention assumptions, and core architecture decisions. Runtime services begin on Day 3.
+Day 3 is complete: the FastAPI API, React/TypeScript interface, PostgreSQL schema, Redis/Celery worker foundation, Docker Compose environment, idempotent reference seed, health endpoints, and baseline quality toolchains are implemented.
 
 ## Users and least privilege
 
@@ -37,8 +37,8 @@ The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relat
 ## Repository map
 
 ```text
-backend/             FastAPI application (begins Day 3)
-frontend/            React/TypeScript application (begins Day 3)
+backend/             FastAPI, SQLAlchemy, Alembic, Celery, and backend tests
+frontend/            React/TypeScript application, tests, and production build
 worker/              Celery task entry points and worker-specific code
 tests/               Cross-service integration and end-to-end tests
 docs/architecture/   System design and diagrams
@@ -51,18 +51,28 @@ infra/               Local and cloud deployment configuration
 .github/workflows/   Continuous integration definitions
 ```
 
-Empty implementation directories contain `.gitkeep` files so the planned layout is visible before code arrives.
-
 ## Getting started today
 
-There is not yet an application runtime or third-party dependency. Validate the completed documentation milestones from PowerShell:
+With Docker Engine and Docker Compose v2 installed, start from a clean clone:
 
 ```powershell
-./scripts/validate-day-01.ps1
-./scripts/validate-day-02.ps1
+docker compose up --build
 ```
 
-For future local development, copy `.env.example` to `.env` and replace the local-only placeholders. Day 3 will add the supported Docker Compose startup and quality-check commands. Do not use production secrets locally or commit `.env`.
+Open the interface at `http://localhost:5173` and API documentation at `http://localhost:8000/docs`. Seed reference roles and one clearly synthetic account with:
+
+```powershell
+docker compose exec api ledgerguard-seed
+```
+
+For native tooling, install dependencies and run all checks:
+
+```powershell
+./scripts/bootstrap.ps1
+./scripts/check.ps1
+```
+
+See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migration, health, configuration, and shutdown details. `.env` is optional for the safe local defaults and must never be committed.
 
 ## Engineering principles
 
@@ -82,7 +92,7 @@ For future local development, copy `.env.example` to `.env` and replace the loca
 - `docs/architecture/OVERVIEW.md` — intended components, trust boundaries, data flow, and deployment shape
 - `docs/architecture/DATA_MODEL.md` — entities, constraints, lifecycles, indexes, and retention assumptions
 - `docs/architecture/ERD.md` — transaction-to-case relationship diagram
-- `docs/decisions/` — accepted decisions for money, identifiers, and audit history
+- `docs/decisions/` — accepted decisions for money, identifiers, audit history, and checked lifecycle values
 - `docs/operations/LOCAL_DEVELOPMENT.md` — current development environment and safety rules
 
 ## License and usage

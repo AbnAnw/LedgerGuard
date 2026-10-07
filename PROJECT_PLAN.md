@@ -14,7 +14,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | ---: | --- | --- |
 | Day 1 | Product definition and repository creation | **Complete** |
 | Day 2 | Domain and data model | **Complete** |
-| Day 3 | Local platform foundation | **Not started** |
+| Day 3 | Local platform foundation | **Complete** |
 | Day 4 | Authentication and role-based access | **Not started** |
 | Day 5 | Transaction ingestion | **Not started** |
 | Day 6 | Idempotency and data-quality controls | **Not started** |
@@ -61,7 +61,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 3 — Local platform foundation
 
-**Status: Not started**
+**Status: Complete**
 
 - Create the FastAPI backend and React/TypeScript frontend.
 - Configure PostgreSQL, Redis, Celery, Docker, and Docker Compose.

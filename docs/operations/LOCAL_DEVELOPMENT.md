@@ -1,36 +1,104 @@
 # Local Development
 
-## Day 1 environment
+## Supported environment
 
-Day 1 is documentation-only and requires Git plus PowerShell 7 or Windows PowerShell 5.1. There are no packages to install and no services to start. Run:
+- Docker Engine with Docker Compose v2 (supported clean-clone path)
+- Python 3.12 for native backend development
+- Node.js 20.19.x or 22.13 through 22.x, plus npm, for native frontend development
+- Git plus PowerShell 7 or Windows PowerShell 5.1 for repository scripts
+
+Runtime images are pinned to Python 3.12.8, Node 22.13.1, PostgreSQL 16.4, Redis 7.4.1, and Nginx 1.27.3. Application dependencies are exactly pinned in `backend/pyproject.toml` and `frontend/package-lock.json`.
+
+## Clean-clone startup with Docker Compose
+
+No `.env` file is required for the synthetic local defaults. To customise ports or credentials, copy `.env.example` to `.env` and replace the placeholders first.
 
 ```powershell
-./scripts/validate-day-01.ps1
+docker compose up --build
 ```
 
-The validator checks the planned repository layout, required planning documents, roadmap statuses, safe environment template, synthetic-data notice, and Git branch.
+The API container waits for PostgreSQL and Redis, applies the Alembic migration, then starts FastAPI. The worker starts after the API becomes healthy. Host ports bind only to the loopback interface. The frontend is available at `http://localhost:5173`, OpenAPI at `http://localhost:8000/docs`, liveness at `http://localhost:8000/health/live`, and dependency readiness at `http://localhost:8000/health/ready`.
 
-## Planned Day 3 environment
+Seed the three roles and a synthetic demonstration account after the stack is healthy:
 
-Day 3 will pin and document the runtime versions for:
+```powershell
+docker compose exec api ledgerguard-seed
+```
 
-- Docker Engine with Docker Compose v2
-- Python and the backend dependency manager
-- Node.js and the frontend package manager
-- PostgreSQL, Redis, FastAPI, React, Celery, SQLAlchemy, and Alembic
+The seed is idempotent. Stop services without deleting their named data volumes:
 
-The supported startup path will be Docker Compose from a clean clone. Native commands may be added for faster iteration but will not replace the reproducible container path.
+```powershell
+docker compose down
+```
 
-## Configuration safety
+Deleting volumes is intentionally not part of the normal workflow because it destroys local database state.
 
-1. Copy `.env.example` to `.env` only when runtime services exist.
-2. Replace placeholder local credentials; never reuse a production secret.
-3. Keep `.env` untracked. The committed `.gitignore` protects `.env` variants while allowing `.env.example`.
+## Native development
+
+Install the backend and frontend development dependencies:
+
+```powershell
+./scripts/bootstrap.ps1
+```
+
+PostgreSQL and Redis must still be reachable using `DATABASE_URL` and `REDIS_URL`. Run all local quality checks:
+
+```powershell
+./scripts/check.ps1
+```
+
+Individual services can be started from their directories:
+
+```powershell
+cd backend
+./.venv/Scripts/alembic.exe upgrade head
+./.venv/Scripts/uvicorn.exe ledgerguard.main:app --reload
+
+cd ../frontend
+npm run dev
+```
+
+Start a native worker from `backend/`:
+
+```powershell
+./.venv/Scripts/celery.exe -A ledgerguard.worker.celery_app worker --loglevel=INFO
+```
+
+## Migration and seed commands
+
+Create schema:
+
+```powershell
+cd backend
+./.venv/Scripts/alembic.exe upgrade head
+./.venv/Scripts/ledgerguard-seed.exe
+```
+
+Render the migration as PostgreSQL SQL without connecting to a database:
+
+```powershell
+./.venv/Scripts/alembic.exe upgrade head --sql
+```
+
+Schema changes must be represented by a new Alembic revision. Never modify a migration already applied outside an isolated local environment.
+
+## Configuration and data safety
+
+1. Replace local placeholders before any shared or production-like deployment; never reuse production secrets locally.
+2. Keep `.env` untracked. The committed `.gitignore` protects `.env` variants while allowing `.env.example`.
+3. Production mode rejects the documented development authentication secret.
 4. Use only generated synthetic data under `sample-data/`.
 5. Treat logs, exports, database dumps, and uploaded fixtures as untrusted local artifacts and do not commit them.
 
 ## Time and money conventions
 
-- Persist and exchange timestamps in UTC. The future interface will display a chosen time zone with an explicit label.
+- Persist and exchange timestamps in UTC. The interface may display a chosen time zone only with an explicit label.
 - Represent money as decimal strings at API/JavaScript boundaries, `Decimal` in Python, and fixed-precision `NUMERIC` in PostgreSQL.
 - Never convert monetary amounts to Python `float` or JavaScript `number` for calculation.
+
+## Health semantics
+
+- `/health/live` proves only that the API process is serving requests.
+- `/health/ready` probes PostgreSQL and Redis and returns HTTP 503 if either dependency is unavailable.
+- Health failures expose only `up`/`down` state; driver messages and credentials are not returned.
+- The Celery container health check uses a targeted worker ping.
