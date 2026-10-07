@@ -99,6 +99,10 @@ Configuration placeholders are documented in `.env.example`; `.env` must remain 
 
 None for Day 3. The temporary Docker cache corruption caused by a full C: drive was repaired after space was freed and Windows restarted; the complete stack subsequently built and passed runtime checks.
 
+## Notion synchronization
+
+Pending for Day 3. The available Notion browser session reached only the login page, so no authenticated LedgerGuard workspace entry could be updated or verified. This progress record contains the concise status, outcome, decisions, test results, resolved blocker, commit reference, and next-day objective needed for later synchronization.
+
 ## Next day's objective
 
 Day 4 will implement password hashing, login/logout, expiring sessions or tokens, synthetic demonstration-user seeding, deny-by-default administrator/analyst/auditor permissions, independent API enforcement, role-aware interface behaviour, and automated authentication and boundary tests.
