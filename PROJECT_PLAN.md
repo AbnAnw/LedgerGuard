@@ -15,7 +15,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 1 | Product definition and repository creation | **Complete** |
 | Day 2 | Domain and data model | **Complete** |
 | Day 3 | Local platform foundation | **Complete** |
-| Day 4 | Authentication and role-based access | **Not started** |
+| Day 4 | Authentication and role-based access | **Complete** |
 | Day 5 | Transaction ingestion | **Not started** |
 | Day 6 | Idempotency and data-quality controls | **Not started** |
 | Day 7 | Reconciliation engine version 1 | **Not started** |
@@ -72,7 +72,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 4 — Authentication and role-based access
 
-**Status: Not started**
+**Status: Complete**
 
 - Implement secure password storage, login, logout, token/session expiry, and synthetic demonstration-user seeding.
 - Implement administrator, operations analyst, and auditor permissions with deny-by-default policies.

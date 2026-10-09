@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ledgerguard import __version__
+from ledgerguard.auth import access_router, auth_router
 from ledgerguard.config import get_settings
 from ledgerguard.health import ReadinessState, probe_dependencies
 
@@ -25,6 +26,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
 )
+app.include_router(auth_router)
+app.include_router(access_router)
 
 
 class LiveResponse(BaseModel):

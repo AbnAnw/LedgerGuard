@@ -24,3 +24,13 @@ def test_production_rejects_development_secret() -> None:
             auth_secret_key="local-development-secret-change-before-use-0001",
             _env_file=None,
         )
+
+
+def test_production_rejects_local_demo_password() -> None:
+    with pytest.raises(ValidationError, match="demonstration value"):
+        Settings(
+            app_env="production",
+            auth_secret_key="production-shaped-secret-with-at-least-32-characters",
+            demo_user_password="DemoOnly!ChangeMe123456",
+            _env_file=None,
+        )

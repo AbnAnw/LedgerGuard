@@ -43,6 +43,10 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-local-development-secret-change-before-use-0001}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
+      LOGIN_LOCK_MINUTES: ${LOGIN_LOCK_MINUTES:-15}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-DemoOnly!ChangeMe123456}
       DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-UTC}
       CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5173}"]'
     command: >-

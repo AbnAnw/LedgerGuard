@@ -8,6 +8,7 @@ from ledgerguard.models import Base, FinancialTransaction
 EXPECTED_TABLES = {
     "accounts",
     "alerts",
+    "auth_sessions",
     "audit_events",
     "case_alerts",
     "case_comments",

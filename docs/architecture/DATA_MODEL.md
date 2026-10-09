@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document is the implementation contract for LedgerGuard's first PostgreSQL schema. It supports the complete path from a source row through validation, immutable financial facts, reconciliation evidence, fraud evaluation, investigation, reporting, and audit review. Day 3 will translate this contract into SQLAlchemy models and an initial Alembic migration.
+This document is the implementation contract for LedgerGuard's PostgreSQL schema. It supports the complete path from an authenticated user and source row through validation, immutable financial facts, reconciliation evidence, fraud evaluation, investigation, reporting, and audit review. SQLAlchemy models and versioned Alembic migrations implement this contract.
 
 Related decisions: [ADR-0001: decimal money](../decisions/0001-decimal-money.md), [ADR-0002: identifiers](../decisions/0002-identifiers.md), and [ADR-0003: audit history](../decisions/0003-append-only-audit-history.md).
 
@@ -25,7 +25,7 @@ Related decisions: [ADR-0001: decimal money](../decisions/0001-decimal-money.md)
 
 | Module | Tables |
 | --- | --- |
-| Identity and access | `users`, `roles`, `user_roles` |
+| Identity and access | `users`, `roles`, `user_roles`, `auth_sessions` |
 | Source accounts and ingestion | `accounts`, `ingestion_batches`, `ingestion_records` |
 | Financial facts | `transactions`, `settlements` |
 | Reconciliation | `reconciliation_runs`, `reconciliation_results`, `reconciliation_result_transactions`, `reconciliation_result_settlements` |
@@ -71,6 +71,21 @@ Represents an authenticated human user. Demonstration users must use synthetic i
 | `revoked_at` | `TIMESTAMPTZ` | Nullable; both revoke fields are null or both populated |
 
 A partial unique index on `(user_id, role_code) WHERE revoked_at IS NULL` prevents duplicate active grants. At least one administrator must remain active; this cross-row invariant is enforced in the administrative service transaction and tested.
+
+### `auth_sessions`
+
+Stores revocable server-side sessions. The raw high-entropy bearer token is returned once and is never persisted; only its keyed SHA-256 digest is stored.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | `UUID` | Primary key, UUIDv4 |
+| `user_id` | `UUID` | Required FK to `users`; cascades only when a user is physically removed |
+| `token_digest` | `VARCHAR(64)` | Required, unique keyed digest; never the bearer token |
+| `created_at` | `TIMESTAMPTZ` | Required; UTC |
+| `expires_at` | `TIMESTAMPTZ` | Required; strictly after creation |
+| `revoked_at` | `TIMESTAMPTZ` | Nullable; when set, not before creation |
+
+Authentication requires an unrevoked, unexpired session and an active user. Logout sets `revoked_at`; disabled or locked users fail closed even when a previously issued token has not expired.
 
 ### `accounts`
 

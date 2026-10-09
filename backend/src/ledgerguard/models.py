@@ -256,6 +256,30 @@ class UserRole(UuidPrimaryKeyMixin, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
 
 
+class AuthSession(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        sa.CheckConstraint("expires_at > created_at", name="ck_auth_sessions_expiry_after_create"),
+        sa.CheckConstraint(
+            "revoked_at IS NULL OR revoked_at >= created_at",
+            name="ck_auth_sessions_revoked_after_create",
+        ),
+        sa.Index("ix_auth_sessions_user_expires", "user_id", "expires_at"),
+        sa.Index(
+            "ix_auth_sessions_active_expiry",
+            "expires_at",
+            postgresql_where=sa.text("revoked_at IS NULL"),
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_digest: Mapped[str] = mapped_column(sa.String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+
 class Account(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base):
     __tablename__ = "accounts"
     __table_args__ = (

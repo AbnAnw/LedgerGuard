@@ -19,13 +19,15 @@ docker compose up --build
 
 The API container waits for PostgreSQL and Redis, applies the Alembic migration, then starts FastAPI. The worker starts after the API becomes healthy. Host ports bind only to the loopback interface. The frontend is available at `http://localhost:5173`, OpenAPI at `http://localhost:8000/docs`, liveness at `http://localhost:8000/health/live`, and dependency readiness at `http://localhost:8000/health/ready`.
 
-Seed the three roles and a synthetic demonstration account after the stack is healthy:
+Seed the three roles, a synthetic demonstration account, and three synthetic users after the stack is healthy:
 
 ```powershell
 docker compose exec api ledgerguard-seed
 ```
 
-The seed is idempotent. Stop services without deleting their named data volumes:
+The seed is idempotent. The local Docker default password is `DemoOnly!ChangeMe123456` for `admin@ledgerguard.invalid`, `analyst@ledgerguard.invalid`, and `auditor@ledgerguard.invalid`. Set `DEMO_USER_PASSWORD` in an untracked `.env` to replace it. The seed refuses to run when `APP_ENV=production`.
+
+Stop services without deleting their named data volumes:
 
 ```powershell
 docker compose down
@@ -87,8 +89,9 @@ Schema changes must be represented by a new Alembic revision. Never modify a mig
 1. Replace local placeholders before any shared or production-like deployment; never reuse production secrets locally.
 2. Keep `.env` untracked. The committed `.gitignore` protects `.env` variants while allowing `.env.example`.
 3. Production mode rejects the documented development authentication secret.
-4. Use only generated synthetic data under `sample-data/`.
-5. Treat logs, exports, database dumps, and uploaded fixtures as untrusted local artifacts and do not commit them.
+4. Production mode rejects the documented demonstration password, and the seed command refuses to create demonstration users.
+5. Use only generated synthetic data under `sample-data/`.
+6. Treat logs, exports, database dumps, and uploaded fixtures as untrusted local artifacts and do not commit them.
 
 ## Time and money conventions
 

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://localhost:6379/1"
     auth_secret_key: SecretStr = SecretStr("local-development-secret-change-before-use-0001")
     access_token_expire_minutes: int = Field(default=30, ge=5, le=1440)
+    login_max_failures: int = Field(default=5, ge=3, le=20)
+    login_lock_minutes: int = Field(default=15, ge=1, le=1440)
+    demo_user_password: SecretStr = SecretStr("DemoOnly!ChangeMe123456")
     display_timezone: str = "UTC"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
@@ -56,6 +59,13 @@ class Settings(BaseSettings):
             "local-development" in secret or "replace-with" in secret or len(secret) < 32
         ):
             raise ValueError("AUTH_SECRET_KEY must be a non-placeholder secret in production")
+        if (
+            self.app_env == "production"
+            and "demoonly" in self.demo_user_password.get_secret_value().lower()
+        ):
+            raise ValueError(
+                "DEMO_USER_PASSWORD must not use the local demonstration value in production"
+            )
         return self
 
 

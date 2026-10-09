@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 3 is complete: the FastAPI API, React/TypeScript interface, PostgreSQL schema, Redis/Celery worker foundation, Docker Compose environment, idempotent reference seed, health endpoints, and baseline quality toolchains are implemented.
+Day 4 is complete: the platform foundation now includes Argon2id password storage, revocable expiring sessions, deny-by-default API permissions, three synthetic demonstration users, and a role-aware interface.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), and architecture decision records under `docs/decisions/` are the contract for the Day 3 schema foundation.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -59,11 +59,13 @@ With Docker Engine and Docker Compose v2 installed, start from a clean clone:
 docker compose up --build
 ```
 
-Open the interface at `http://localhost:5173` and API documentation at `http://localhost:8000/docs`. Seed reference roles and one clearly synthetic account with:
+Open the interface at `http://localhost:5173` and API documentation at `http://localhost:8000/docs`. Seed reference roles, one synthetic account, and the three synthetic users with:
 
 ```powershell
 docker compose exec api ledgerguard-seed
 ```
+
+For the unchanged local Docker defaults, sign in with `admin@ledgerguard.invalid`, `analyst@ledgerguard.invalid`, or `auditor@ledgerguard.invalid` and the local-only password `DemoOnly!ChangeMe123456`. Override `DEMO_USER_PASSWORD` in an untracked `.env` before sharing the environment. These credentials are blocked from production use.
 
 For native tooling, install dependencies and run all checks:
 

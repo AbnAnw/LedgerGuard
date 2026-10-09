@@ -22,6 +22,14 @@ erDiagram
         uuid granted_by_user_id FK
         timestamptz revoked_at
     }
+    AUTH_SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        string token_digest UK
+        timestamptz created_at
+        timestamptz expires_at
+        timestamptz revoked_at
+    }
     ACCOUNTS {
         uuid id PK
         string source_system
@@ -161,6 +169,7 @@ erDiagram
     }
 
     USERS ||--o{ USER_ROLES : receives
+    USERS ||--o{ AUTH_SESSIONS : authenticates
     ROLES ||--o{ USER_ROLES : grants
     USERS ||--o{ USER_ROLES : administers
     USERS ||--o{ INGESTION_BATCHES : requests
