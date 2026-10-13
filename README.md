@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 4 is complete: the platform foundation now includes Argon2id password storage, revocable expiring sessions, deny-by-default API permissions, three synthetic demonstration users, and a role-aware interface.
+Day 5 is complete: authenticated administrators and operations analysts can ingest versioned transaction batches through JSON or CSV. The shared validation pipeline uses decimal-safe amounts, normalizes timestamps to UTC, and persists accepted facts plus traceable rejection evidence; auditors remain read-only.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -76,6 +76,8 @@ For native tooling, install dependencies and run all checks:
 
 See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migration, health, configuration, and shutdown details. `.env` is optional for the safe local defaults and must never be committed.
 
+After signing in as the synthetic analyst, submit either published fixture under `sample-data/` to the matching `/api/v1/ingestion/transactions/json` or `/api/v1/ingestion/transactions/csv` endpoint. The [version 1 ingestion contract](docs/api/TRANSACTION_INGESTION_V1.md) documents exact fields, outcomes, and stable rejection codes.
+
 ## Engineering principles
 
 - Monetary values use decimal-safe representations end to end; binary floating point is forbidden for money.
@@ -96,6 +98,7 @@ See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migra
 - `docs/architecture/ERD.md` — transaction-to-case relationship diagram
 - `docs/decisions/` — accepted decisions for money, identifiers, audit history, and checked lifecycle values
 - `docs/operations/LOCAL_DEVELOPMENT.md` — current development environment and safety rules
+- `docs/api/TRANSACTION_INGESTION_V1.md` — versioned JSON/CSV ingestion contract and rejection catalogue
 
 ## License and usage
 

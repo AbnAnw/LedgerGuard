@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     login_max_failures: int = Field(default=5, ge=3, le=20)
     login_lock_minutes: int = Field(default=15, ge=1, le=1440)
     demo_user_password: SecretStr = SecretStr("DemoOnly!ChangeMe123456")
+    ingestion_max_upload_bytes: int = Field(default=2_000_000, ge=1024, le=20_000_000)
     display_timezone: str = "UTC"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 

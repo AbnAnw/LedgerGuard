@@ -143,11 +143,12 @@ Preserves the per-row validation decision, including rejected data, without requ
 | `payload_sha256` | `CHAR(64)` | Required |
 | `outcome` | `ingestion_record_outcome` | `accepted`, `rejected`, `duplicate`, or `conflict` |
 | `reason_codes` | `JSONB` | Required array; empty only for accepted rows |
+| `rejection_details` | `JSONB` | Required array of stable field/code/message objects; empty for accepted rows |
 | `transaction_id` | `UUID` | Nullable unique FK to `transactions` |
 | `settlement_id` | `UUID` | Nullable unique FK to `settlements` |
 | `processed_at` | `TIMESTAMPTZ` | Required; UTC |
 
-An accepted record links to exactly one fact matching the batch kind. A rejected, duplicate, or conflicting record links to no new fact. This conditional invariant is enforced in the ingestion transaction and tested; a deferred constraint trigger may reinforce it if ordinary checks cannot span the foreign rows cleanly.
+An accepted record links to exactly one fact matching the batch kind. A rejected, duplicate, or conflicting record links to no new fact. `reason_codes` supports stable aggregation, while `rejection_details` identifies each invalid field without echoing sensitive input into error messages. This conditional invariant is enforced in the ingestion transaction and tested; a deferred constraint trigger may reinforce it if ordinary checks cannot span the foreign rows cleanly.
 
 ### `transactions`
 

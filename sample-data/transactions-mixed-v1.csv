@@ -1,0 +1,4 @@
+source_record_id,source_reference,amount,currency,direction,status,occurred_at,instrument_fingerprint
+CSV-MIXED-001,ORDER-CSV-MIXED-001,50.000000,USD,debit,posted,2026-10-13T03:00:00Z,
+CSV-MIXED-002,ORDER-CSV-MIXED-002,-1.25,USD,debit,posted,2026-10-13T03:05:00Z,
+CSV-MIXED-003,ORDER-CSV-MIXED-003,10.000000,ZZZ,credit,posted,not-a-timestamp,

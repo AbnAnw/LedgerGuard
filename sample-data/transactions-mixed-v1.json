@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "source_system": "synthetic-demo",
+  "source_account_id": "DEMO-ACCOUNT-001",
+  "records": [
+    {
+      "source_record_id": "JSON-MIXED-001",
+      "source_reference": "ORDER-MIXED-001",
+      "amount": "50.000000",
+      "currency": "USD",
+      "direction": "debit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T03:00:00Z"
+    },
+    {
+      "source_record_id": "JSON-MIXED-002",
+      "source_reference": "ORDER-MIXED-002",
+      "amount": -1.25,
+      "currency": "USD",
+      "direction": "debit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T03:05:00Z"
+    },
+    {
+      "source_record_id": "JSON-MIXED-003",
+      "source_reference": "ORDER-MIXED-003",
+      "amount": "10.000000",
+      "currency": "ZZZ",
+      "direction": "credit",
+      "status": "posted",
+      "occurred_at": "not-a-timestamp"
+    }
+  ]
+}

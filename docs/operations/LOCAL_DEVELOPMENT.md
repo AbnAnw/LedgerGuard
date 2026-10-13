@@ -27,6 +27,28 @@ docker compose exec api ledgerguard-seed
 
 The seed is idempotent. The local Docker default password is `DemoOnly!ChangeMe123456` for `admin@ledgerguard.invalid`, `analyst@ledgerguard.invalid`, and `auditor@ledgerguard.invalid`. Set `DEMO_USER_PASSWORD` in an untracked `.env` to replace it. The seed refuses to run when `APP_ENV=production`.
 
+## Try transaction ingestion
+
+Sign in as the synthetic operations analyst and retain the returned bearer token:
+
+```powershell
+$login = Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/auth/login -ContentType 'application/json' -Body (@{
+    email = 'analyst@ledgerguard.invalid'
+    password = 'DemoOnly!ChangeMe123456'
+} | ConvertTo-Json)
+$headers = @{ Authorization = "Bearer $($login.access_token)" }
+```
+
+Submit the valid JSON fixture:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/ingestion/transactions/json -Headers $headers -ContentType 'application/json' -InFile ./sample-data/transactions-valid-v1.json
+```
+
+The CSV endpoint accepts `schema_version`, `source_system`, and `source_account_id` as form fields alongside a `file` upload. OpenAPI at `http://localhost:8000/docs` provides an interactive form. Both endpoints use the same validation rules documented in the [version 1 ingestion contract](../api/TRANSACTION_INGESTION_V1.md).
+
+Day 5 processing is synchronous and limited to 10,000 rows and 2 MB by default. Configure the byte limit with `INGESTION_MAX_UPLOAD_BYTES`. Retry-safe idempotency is added on Day 6, so use fresh source record identifiers when manually repeating a request.
+
 Stop services without deleting their named data volumes:
 
 ```powershell

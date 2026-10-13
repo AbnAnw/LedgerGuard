@@ -466,6 +466,9 @@ class IngestionRecord(UuidPrimaryKeyMixin, Base):
         enum_column(IngestionRecordOutcome, "ingestion_record_outcome"), nullable=False
     )
     reason_codes: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    rejection_details: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     transaction_id: Mapped[UUID | None] = mapped_column(
         sa.ForeignKey("transactions.id", ondelete="RESTRICT"), unique=True
     )

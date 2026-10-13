@@ -37,6 +37,7 @@ services:
     environment: &backend-environment
       APP_ENV: development
       APP_NAME: LedgerGuard
+      PYTHONPATH: /app/src
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ledgerguard}:${POSTGRES_PASSWORD:-ledgerguard-local-only}@postgres:5432/${POSTGRES_DB:-ledgerguard}
       REDIS_URL: redis://redis:6379/0
@@ -47,6 +48,7 @@ services:
       LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
       LOGIN_LOCK_MINUTES: ${LOGIN_LOCK_MINUTES:-15}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-DemoOnly!ChangeMe123456}
+      INGESTION_MAX_UPLOAD_BYTES: ${INGESTION_MAX_UPLOAD_BYTES:-2000000}
       DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-UTC}
       CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5173}"]'
     command: >-

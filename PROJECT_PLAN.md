@@ -16,7 +16,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 2 | Domain and data model | **Complete** |
 | Day 3 | Local platform foundation | **Complete** |
 | Day 4 | Authentication and role-based access | **Complete** |
-| Day 5 | Transaction ingestion | **Not started** |
+| Day 5 | Transaction ingestion | **Complete** |
 | Day 6 | Idempotency and data-quality controls | **Not started** |
 | Day 7 | Reconciliation engine version 1 | **Not started** |
 | Day 8 | Analyst dashboard | **Not started** |
@@ -83,7 +83,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 5 — Transaction ingestion
 
-**Status: Not started**
+**Status: Complete**
 
 - Implement CSV upload and JSON API ingestion.
 - Publish the accepted, versioned transaction schema.

@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "source_system": "synthetic-demo",
+  "source_account_id": "DEMO-ACCOUNT-001",
+  "records": [
+    {
+      "source_record_id": "JSON-VALID-001",
+      "source_reference": "ORDER-JSON-001",
+      "amount": "125.450000",
+      "currency": "USD",
+      "direction": "debit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T01:30:00Z",
+      "instrument_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "source_record_id": "JSON-VALID-002",
+      "source_reference": "ORDER-JSON-002",
+      "amount": "19.990000",
+      "currency": "SGD",
+      "direction": "credit",
+      "status": "pending",
+      "occurred_at": "2026-10-13T10:15:00+08:00"
+    }
+  ]
+}
