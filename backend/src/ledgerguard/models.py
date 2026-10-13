@@ -315,12 +315,21 @@ class IngestionBatch(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base):
         ),
         sa.CheckConstraint("payload_sha256 ~ '^[0-9a-f]{64}$'", name="ck_batches_payload_hash"),
         sa.CheckConstraint(
+            "length(btrim(idempotency_key)) BETWEEN 1 AND 200",
+            name="ck_batches_idempotency_key",
+        ),
+        sa.CheckConstraint(
             "source_count IS NULL OR source_count >= 0", name="ck_batches_source_count"
         ),
         sa.CheckConstraint(
             "accepted_count >= 0 AND rejected_count >= 0 AND duplicate_count >= 0 "
             "AND conflict_count >= 0",
             name="ck_batches_result_counts",
+        ),
+        sa.CheckConstraint(
+            "status NOT IN ('completed', 'completed_with_errors') OR "
+            "source_count = accepted_count + rejected_count + duplicate_count + conflict_count",
+            name="ck_batches_terminal_totals",
         ),
         sa.CheckConstraint("version > 0", name="ck_batches_version_positive"),
         sa.Index("ix_ingestion_batches_status_created", "status", sa.desc("created_at")),

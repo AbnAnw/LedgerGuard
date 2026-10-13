@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "source_system": "synthetic-demo",
+  "source_account_id": "DEMO-ACCOUNT-001",
+  "records": [
+    {
+      "source_record_id": "JSON-QUALITY-001",
+      "source_reference": "ORDER-QUALITY-001",
+      "amount": "75.250000",
+      "currency": "USD",
+      "direction": "debit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T04:00:00Z"
+    },
+    {
+      "source_record_id": "JSON-QUALITY-001",
+      "source_reference": "ORDER-QUALITY-001",
+      "amount": "75.25",
+      "currency": "USD",
+      "direction": "debit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T12:00:00+08:00"
+    },
+    {
+      "source_record_id": "JSON-QUALITY-001",
+      "source_reference": "ORDER-QUALITY-001",
+      "amount": "80.000000",
+      "currency": "USD",
+      "direction": "debit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T04:00:00Z"
+    },
+    {
+      "source_record_id": "JSON-QUALITY-002",
+      "source_reference": "ORDER-QUALITY-002",
+      "amount": "5.000000",
+      "currency": "ZZZ",
+      "direction": "credit",
+      "status": "posted",
+      "occurred_at": "2026-10-13T04:05:00Z"
+    }
+  ]
+}

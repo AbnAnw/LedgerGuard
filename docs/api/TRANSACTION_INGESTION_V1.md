@@ -7,7 +7,7 @@ LedgerGuard accepts synthetic transaction batches through authenticated JSON and
 - `POST /api/v1/ingestion/transactions/json` with an `application/json` body.
 - `POST /api/v1/ingestion/transactions/csv` with multipart form fields and one UTF-8 CSV file.
 
-Both require `Authorization: Bearer <session token>` and return HTTP 201 after the batch and all record evidence commit successfully.
+Both require `Authorization: Bearer <session token>` and `Idempotency-Key: <key>`. A new batch returns HTTP 201 after all evidence commits; an exact retry returns the original batch with HTTP 200 and `idempotent_replay: true`. See [idempotency and data quality](IDEMPOTENCY_AND_DATA_QUALITY.md) for the complete retry contract.
 
 ## Batch metadata
 
@@ -40,7 +40,7 @@ Unpublished fields are rejected so schema changes remain explicit and versioned.
 
 Every syntactically readable row produces an `ingestion_records` row with its one-based row number, original payload, SHA-256 payload hash, outcome, stable reason codes, structured rejection details, and accepted transaction link when applicable. An all-valid batch is `completed`; a mixed or all-invalid batch is `completed_with_errors`.
 
-The response includes batch totals and per-row outcomes. Rejected records do not create financial transactions.
+The response includes accepted, rejected, duplicate, and conflict totals; per-row outcomes; and a deterministic quality summary. Rejected, duplicate, and conflicting records do not create financial transactions.
 
 | Rejection code | Meaning |
 | --- | --- |
@@ -55,11 +55,13 @@ The response includes batch totals and per-row outcomes. Rejected records do not
 | `INVALID_TIMESTAMP` | Timestamp is malformed or lacks an offset |
 | `INVALID_INSTRUMENT_FINGERPRINT` | Fingerprint is not empty or 64 lowercase hex characters |
 | `INVALID_RECORD` | Record-level schema failure without a more specific code |
+| `DUPLICATE_SOURCE_RECORD` | The account already has the same normalized data under this source identifier |
+| `CONFLICTING_SOURCE_RECORD` | The account already has different normalized data under this source identifier |
 
-Batch-level errors include `ACCOUNT_NOT_FOUND`, `INVALID_CSV_ENCODING`, `MISSING_CSV_COLUMNS`, `EMPTY_BATCH`, `BATCH_TOO_LARGE`, and `UPLOAD_TOO_LARGE`.
+Batch-level errors include `ACCOUNT_NOT_FOUND`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_CSV_ENCODING`, `MISSING_CSV_COLUMNS`, `EMPTY_BATCH`, `BATCH_TOO_LARGE`, and `UPLOAD_TOO_LARGE`.
 
 ## Scope boundary
 
-Day 5 generates an internal unique batch key so every accepted request can be stored. Client idempotency keys, duplicate/conflict classification, and retry semantics are intentionally implemented on Day 6. Background parsing begins on Day 9.
+Day 6 requires client idempotency keys and classifies duplicate/conflicting source identifiers before a financial fact is written. Background parsing begins on Day 9.
 
 Synthetic examples are under [`sample-data/`](../../sample-data/README.md).

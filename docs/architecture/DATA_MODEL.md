@@ -127,7 +127,7 @@ Represents one CSV upload or JSON submission and is the boundary for request ide
 | `created_at`, `started_at`, `finished_at` | `TIMESTAMPTZ` | UTC; processing times nullable |
 | `version` | `INTEGER` | Required, positive |
 
-When terminal and `source_count` is known, it must equal accepted + rejected + duplicate + conflict. Reusing an idempotency key with another payload hash is a conflict, not a retry.
+For `completed` and `completed_with_errors`, PostgreSQL requires `source_count` to equal accepted + rejected + duplicate + conflict. Idempotency keys are non-blank and capped at 200 characters by both API and database checks. Reusing a `(source_system, idempotency_key)` with the same canonical payload hash returns the stored result; using it with another hash is a conflict, not a retry.
 
 ### `ingestion_records`
 

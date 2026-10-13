@@ -42,12 +42,13 @@ $headers = @{ Authorization = "Bearer $($login.access_token)" }
 Submit the valid JSON fixture:
 
 ```powershell
+$headers['Idempotency-Key'] = 'local-json-example-001'
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/ingestion/transactions/json -Headers $headers -ContentType 'application/json' -InFile ./sample-data/transactions-valid-v1.json
 ```
 
 The CSV endpoint accepts `schema_version`, `source_system`, and `source_account_id` as form fields alongside a `file` upload. OpenAPI at `http://localhost:8000/docs` provides an interactive form. Both endpoints use the same validation rules documented in the [version 1 ingestion contract](../api/TRANSACTION_INGESTION_V1.md).
 
-Day 5 processing is synchronous and limited to 10,000 rows and 2 MB by default. Configure the byte limit with `INGESTION_MAX_UPLOAD_BYTES`. Retry-safe idempotency is added on Day 6, so use fresh source record identifiers when manually repeating a request.
+Processing remains synchronous and is limited to 10,000 rows and 2 MB by default. Configure the byte limit with `INGESTION_MAX_UPLOAD_BYTES`. Repeating the same key and content returns the original batch without creating rows; changing content while reusing the key returns HTTP 409. Use a new key to intentionally submit a new batch, where repeated source identifiers are classified as duplicates or conflicts.
 
 Stop services without deleting their named data volumes:
 

@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 5 is complete: authenticated administrators and operations analysts can ingest versioned transaction batches through JSON or CSV. The shared validation pipeline uses decimal-safe amounts, normalizes timestamps to UTC, and persists accepted facts plus traceable rejection evidence; auditors remain read-only.
+Day 6 is complete: transaction ingestion is retry-safe through client idempotency keys and canonical payload fingerprints. Repeated source records are deterministically classified as duplicates or conflicts, PostgreSQL reinforces uniqueness and terminal totals, and every response includes a batch-level quality summary.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -99,6 +99,7 @@ After signing in as the synthetic analyst, submit either published fixture under
 - `docs/decisions/` — accepted decisions for money, identifiers, audit history, and checked lifecycle values
 - `docs/operations/LOCAL_DEVELOPMENT.md` — current development environment and safety rules
 - `docs/api/TRANSACTION_INGESTION_V1.md` — versioned JSON/CSV ingestion contract and rejection catalogue
+- `docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md` — retry, duplicate, conflict, fingerprint, and quality-summary semantics
 
 ## License and usage
 

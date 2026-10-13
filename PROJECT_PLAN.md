@@ -17,7 +17,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 3 | Local platform foundation | **Complete** |
 | Day 4 | Authentication and role-based access | **Complete** |
 | Day 5 | Transaction ingestion | **Complete** |
-| Day 6 | Idempotency and data-quality controls | **Not started** |
+| Day 6 | Idempotency and data-quality controls | **Complete** |
 | Day 7 | Reconciliation engine version 1 | **Not started** |
 | Day 8 | Analyst dashboard | **Not started** |
 | Day 9 | Background processing | **Not started** |
@@ -94,7 +94,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 6 — Idempotency and data-quality controls
 
-**Status: Not started**
+**Status: Complete**
 
 - Add request idempotency keys, payload fingerprints, and source-record identifiers.
 - Prevent duplicate batches and transactions using application logic and database constraints.

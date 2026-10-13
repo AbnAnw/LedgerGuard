@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 5 — Transaction ingestion: Complete**
+**Day 6 — Idempotency and data-quality controls: Complete**
 
 ## Completed days
 
@@ -11,10 +11,11 @@
 - **Day 3 (2026-10-07):** Implemented the FastAPI and React/TypeScript foundations; configured PostgreSQL, Redis, Celery, and a five-service Docker Compose stack; added validated settings, SQLAlchemy models, the explicit initial Alembic migration, idempotent synthetic seeding, health endpoints, pinned development tooling, automated checks, and clean-clone setup documentation.
 - **Day 4 (2026-10-09):** Added Argon2id password hashing, opaque bearer sessions stored as keyed digests, PostgreSQL-backed expiry and logout revocation, login lockout handling, synthetic demonstration users, deny-by-default permissions, protected API boundaries, and a role-aware interface.
 - **Day 5 (2026-10-13):** Added authenticated JSON and CSV transaction ingestion through one versioned validation pipeline; decimal-safe amounts, UTC normalization, identifier/currency/status validation, accepted financial facts, persisted rejection evidence, bounded uploads, published synthetic fixtures, and integration-proven role enforcement.
+- **Day 6 (2026-10-13):** Added required client idempotency keys, canonical batch and row payload fingerprints, exact-retry replay, changed-payload conflict handling, normalized source-record duplicate/conflict classification, account-level concurrency serialization, deterministic batch-quality summaries, and reinforcing PostgreSQL checks.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform and loads mounted Python source explicitly for reliable local iteration. SQLAlchemy implements the domain model; three Alembic revisions provide the 20-table initial schema, revocable authentication sessions, structured ingestion rejection evidence, database constraints, and an append-only audit trigger. FastAPI is the authorization boundary, while the interface mirrors role access without persisting bearer tokens in browser storage. The synchronous Day 5 ingestion module accepts JSON or CSV through one schema-versioned validation and persistence path; Celery processing remains scheduled for Day 9. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform and loads mounted Python source explicitly for reliable local iteration. SQLAlchemy implements the domain model; four Alembic revisions provide the 20-table initial schema, revocable authentication sessions, structured ingestion evidence, terminal quality-total checks, database uniqueness, and an append-only audit trigger. FastAPI is the authorization boundary, while the interface mirrors role access without persisting bearer tokens in browser storage. The synchronous ingestion module accepts JSON or CSV through one schema-versioned, retry-safe validation and persistence path; Celery processing remains scheduled for Day 9. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -43,6 +44,10 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Route JSON and UTF-8 CSV through the same strict record validator. Persist every readable row with a canonical SHA-256 payload digest, stable reason codes, structured field-level rejection details, and an accepted transaction link when applicable.
 - Limit synchronous Day 5 requests to 10,000 records and CSV uploads to 2 MB by default. Generate an internal batch key until client retry/idempotency semantics are added on Day 6.
 - Flush each ingestion batch, then accepted transactions, then record evidence within one database transaction so PostgreSQL foreign keys are always satisfied; roll back the entire unit on database error.
+- Require a 1–200 character `Idempotency-Key`, scoped with `source_system`. Return the stored batch for an identical canonical payload hash and HTTP 409 for changed content; database uniqueness remains the final race guard.
+- Compare normalized source reference, `Decimal` amount, currency, direction, status, UTC occurrence time, and fingerprint when classifying duplicate versus conflicting source identifiers. Neither outcome creates a new financial fact.
+- Lock the active source-account row during classification so concurrent deliveries for one account cannot race past the existing-transaction check.
+- Report clean/issues status, accepted/rejected/duplicate/conflict counts, issue count, a two-decimal string acceptance percentage, and deterministic reason counts without binary floating-point arithmetic.
 
 ## Commands required to run the system
 
@@ -64,6 +69,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-03.ps1
 ./scripts/validate-day-04.ps1
 ./scripts/validate-day-05.ps1
+./scripts/validate-day-06.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -96,6 +102,23 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 - Day 3 structural validation: passed; application foundations, five Compose services, 20-table migration, quality tooling, environment contract, and roadmap status verified.
 - Final Markdown local-link validation: passed; 15 Markdown files checked with no broken local links.
 - Final secret-pattern review: passed; 67 tracked or unignored candidate files checked with no matching private-key, AWS access-key, GitHub token, OpenAI-style API-key, or Google API-key patterns.
+- Final Git whitespace/error check: passed with no findings.
+- Day 6 backend formatting: passed; 22 source, test, and migration files were formatted.
+- Day 6 backend linting: passed with no Ruff findings.
+- Day 6 strict type checking: passed; no issues in 10 source files.
+- Day 6 backend automated tests: 59 passed in 8.24 seconds on Python 3.12.8. Measured statement coverage was 90% overall (992 statements, 97 missed) and 97% for the ingestion module (297 statements, 10 missed). One upstream Starlette/AnyIO deprecation warning remains.
+- Day 6 frontend regression checks: ESLint and TypeScript checking passed; 4 tests passed in one Vitest file; the production build transformed 16 modules and produced a 147.11 kB JavaScript bundle (48.08 kB gzip); the locked dependency audit found 0 known vulnerabilities.
+- Complete Alembic offline render: passed; 455 SQL lines rendered all four revisions through `20261013_0004`, including idempotency-key and terminal-total checks.
+- Day 6 migration and seed: Alembic reported `20261013_0004 (head)` and the synthetic seed completed successfully.
+- Live idempotency path: the first four-row quality request returned HTTP 201 with accepted/rejected/duplicate/conflict counts `1/1/1/1` and acceptance rate `25.00`; its exact retry returned HTTP 200, the same batch ID, and `idempotent_replay: true`.
+- Live changed-payload path: reusing the key with changed content returned HTTP 409 and `IDEMPOTENCY_KEY_REUSED`.
+- Live prior-batch quality path: a new key for the same payload returned HTTP 201 with counts `0/1/2/1`; only one `JSON-QUALITY-*` financial transaction existed across both batches.
+- Live retry persistence proof: the exact-retry key had exactly one batch, four evidence rows, and one transaction after retry.
+- Live database safeguards: PostgreSQL rejected an impossible terminal total through `ck_batches_terminal_totals` and a duplicate `(account_id, source_record_id)` through `uq_transactions_source`.
+- Live platform check: API readiness reported PostgreSQL and Redis `up`, the frontend returned HTTP 200, the Celery worker returned `pong`, and all five Compose services were running with API/PostgreSQL/Redis/worker healthy.
+- Day 1–6 structural validators: passed.
+- Final Markdown local-link validation: passed; 19 Markdown files checked with no broken local links.
+- Final secret-pattern review: passed; 86 tracked or unignored paths checked with no matching private-key, AWS access-key, GitHub token, OpenAI-style API-key, or Google API-key patterns.
 - Final Git whitespace/error check: passed with no findings.
 - Day 5 backend formatting: passed; 21 source, test, and migration files were already formatted after the import-order correction.
 - Day 5 backend linting: passed with no Ruff findings.
@@ -139,21 +162,20 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 - Retention periods are unratified design assumptions pending Day 16; the production queue choice remains a Day 19 decision.
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
 - The pinned Starlette test client emits one upstream AnyIO deprecation warning. It does not fail the test suite.
-- Client-supplied idempotency keys, duplicate/conflict classification, and retry-safe deduplication are intentionally deferred to Day 6. Repeating a successful Day 5 fixture with the same source-record identifiers can violate the existing uniqueness constraint.
 - Day 5 parsing is synchronous and capped at 10,000 records and 2 MB by default; background parsing, progress, retries, and large-batch behaviour are scheduled for Day 9.
 - A commit cannot embed its own final Git hash without changing that hash. This file therefore identifies the latest completed daily commit as `HEAD`; the exact short hash is reported after commit and can always be resolved with `git rev-parse --short HEAD`.
 
 ## Blockers
 
-None for Day 5.
+None for Day 6.
 
 ## Notion synchronization
 
-Day 5 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
+Day 6 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
 
 ## Next day's objective
 
-Day 6 will add client idempotency keys, payload fingerprints, duplicate and conflict classification, retry-safe application/database controls, and a batch-level data-quality summary.
+Day 7 will implement deterministic reconciliation against settlements using reference, decimal amount, currency, and a documented UTC time window, with stored candidate evidence and explainable classifications.
 
 ## Latest commit hash
 

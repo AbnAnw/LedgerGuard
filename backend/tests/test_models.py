@@ -3,7 +3,7 @@ from pathlib import Path
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 
-from ledgerguard.models import Base, FinancialTransaction
+from ledgerguard.models import Base, FinancialTransaction, IngestionBatch
 
 EXPECTED_TABLES = {
     "accounts",
@@ -58,3 +58,11 @@ def test_initial_migration_contains_audit_immutability_trigger() -> None:
     assert "audit_events_append_only" in migration
     assert "BEFORE UPDATE OR DELETE ON audit_events" in migration
     assert "reject_audit_event_mutation" in migration
+
+
+def test_ingestion_batch_has_database_idempotency_and_quality_guards() -> None:
+    constraint_names = {constraint.name for constraint in IngestionBatch.__table__.constraints}
+
+    assert "uq_ingestion_batches_idempotency" in constraint_names
+    assert "ck_batches_idempotency_key" in constraint_names
+    assert "ck_batches_terminal_totals" in constraint_names

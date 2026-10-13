@@ -1,4 +1,4 @@
-"""Synchronous Day 5 transaction ingestion and record-level validation."""
+"""Retry-safe transaction ingestion and evidence-backed data-quality controls."""
 
 from __future__ import annotations
 
@@ -13,10 +13,20 @@ from pathlib import PurePosixPath
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
@@ -76,7 +86,15 @@ REASON_MESSAGES = {
         "instrument_fingerprint must be empty or 64 lowercase hexadecimal characters."
     ),
     "INVALID_RECORD": "The record does not conform to transaction schema version 1.0.",
+    "DUPLICATE_SOURCE_RECORD": (
+        "source_record_id already exists with the same normalized transaction data."
+    ),
+    "CONFLICTING_SOURCE_RECORD": (
+        "source_record_id already exists with different normalized transaction data."
+    ),
 }
+
+IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
 
 
 class IngestionBatchMetadata(BaseModel):
@@ -178,6 +196,13 @@ class IngestionRecordResult(BaseModel):
     transaction_id: UUID | None
 
 
+class BatchQualitySummary(BaseModel):
+    quality_status: Literal["clean", "issues_detected"]
+    issue_count: int
+    acceptance_rate_percent: str
+    reason_counts: dict[str, int]
+
+
 class IngestionBatchResponse(BaseModel):
     batch_id: UUID
     schema_version: str
@@ -185,12 +210,135 @@ class IngestionBatchResponse(BaseModel):
     source_count: int
     accepted_count: int
     rejected_count: int
+    duplicate_count: int
+    conflict_count: int
+    idempotent_replay: bool
+    quality_summary: BatchQualitySummary
     records: list[IngestionRecordResult]
 
 
 def canonical_sha256(value: object) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _normalized_record_signature(record: TransactionRecordV1) -> tuple[object, ...]:
+    return (
+        record.source_reference,
+        record.decimal_amount,
+        record.currency,
+        record.direction,
+        record.status,
+        record.occurred_at,
+        record.instrument_fingerprint,
+    )
+
+
+def _stored_transaction_signature(transaction: FinancialTransaction) -> tuple[object, ...]:
+    occurred_at = transaction.occurred_at
+    if occurred_at.tzinfo is not None and occurred_at.utcoffset() is not None:
+        occurred_at = occurred_at.astimezone(UTC)
+    return (
+        transaction.source_reference,
+        Decimal(transaction.amount),
+        transaction.currency,
+        transaction.direction,
+        transaction.status,
+        occurred_at,
+        transaction.instrument_fingerprint,
+    )
+
+
+def _source_record_detail(
+    code: Literal["DUPLICATE_SOURCE_RECORD", "CONFLICTING_SOURCE_RECORD"],
+) -> dict[str, str]:
+    return {"code": code, "field": "source_record_id", "message": REASON_MESSAGES[code]}
+
+
+def _quality_summary(
+    source_count: int,
+    accepted_count: int,
+    rejected_count: int,
+    duplicate_count: int,
+    conflict_count: int,
+    records: list[IngestionRecordResult],
+) -> BatchQualitySummary:
+    issue_count = rejected_count + duplicate_count + conflict_count
+    acceptance_rate = (
+        (Decimal(accepted_count) * Decimal(100) / Decimal(source_count)).quantize(Decimal("0.01"))
+        if source_count
+        else Decimal("0.00")
+    )
+    reason_counts: dict[str, int] = {}
+    for code in sorted(code for record in records for code in record.reason_codes):
+        reason_counts[code] = reason_counts.get(code, 0) + 1
+    return BatchQualitySummary(
+        quality_status="clean" if issue_count == 0 else "issues_detected",
+        issue_count=issue_count,
+        acceptance_rate_percent=format(acceptance_rate, ".2f"),
+        reason_counts=reason_counts,
+    )
+
+
+def _batch_response(
+    batch: IngestionBatch,
+    records: list[IngestionRecordResult],
+    *,
+    idempotent_replay: bool,
+) -> IngestionBatchResponse:
+    source_count = batch.source_count or 0
+    return IngestionBatchResponse(
+        batch_id=batch.id,
+        schema_version=batch.schema_version,
+        status=batch.status,
+        source_count=source_count,
+        accepted_count=batch.accepted_count,
+        rejected_count=batch.rejected_count,
+        duplicate_count=batch.duplicate_count,
+        conflict_count=batch.conflict_count,
+        idempotent_replay=idempotent_replay,
+        quality_summary=_quality_summary(
+            source_count,
+            batch.accepted_count,
+            batch.rejected_count,
+            batch.duplicate_count,
+            batch.conflict_count,
+            records,
+        ),
+        records=records,
+    )
+
+
+def _replay_response(db: Session, batch: IngestionBatch) -> IngestionBatchResponse:
+    stored_records = db.scalars(
+        select(IngestionRecord)
+        .where(IngestionRecord.batch_id == batch.id)
+        .order_by(IngestionRecord.row_number)
+    ).all()
+    records = [
+        IngestionRecordResult(
+            row_number=record.row_number,
+            source_record_id=record.source_record_id,
+            outcome=record.outcome,
+            reason_codes=list(record.reason_codes),
+            rejection_details=[
+                RejectionDetail.model_validate(detail) for detail in record.rejection_details
+            ],
+            transaction_id=record.transaction_id,
+        )
+        for record in stored_records
+    ]
+    return _batch_response(batch, records, idempotent_replay=True)
+
+
+def _raise_idempotency_conflict() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "IDEMPOTENCY_KEY_REUSED",
+            "message": "Idempotency-Key was already used for a different batch payload.",
+        },
+    )
 
 
 def rejection_details(error: ValidationError) -> tuple[list[str], list[dict[str, str]]]:
@@ -264,16 +412,19 @@ def ingest_transactions(
     metadata: IngestionBatchMetadata,
     raw_records: list[dict[str, Any]],
     principal: AuthPrincipal,
+    idempotency_key: str,
     original_filename: str | None = None,
 ) -> IngestionBatchResponse:
     """Validate every row and atomically persist the batch, evidence, and accepted facts."""
 
     account = db.scalar(
-        select(Account).where(
+        select(Account)
+        .where(
             Account.source_system == metadata.source_system,
             Account.source_account_id == metadata.source_account_id,
             Account.status == AccountStatus.ACTIVE,
         )
+        .with_for_update()
     )
     if account is None:
         raise HTTPException(
@@ -285,15 +436,55 @@ def ingest_transactions(
         )
 
     now = datetime.now(UTC)
-    batch_id = uuid4()
     payload = {"metadata": metadata.model_dump(), "records": raw_records}
+    payload_sha256 = canonical_sha256(payload)
+    existing_batch = db.scalar(
+        select(IngestionBatch).where(
+            IngestionBatch.source_system == metadata.source_system,
+            IngestionBatch.idempotency_key == idempotency_key,
+        )
+    )
+    if existing_batch is not None:
+        if existing_batch.payload_sha256 != payload_sha256:
+            _raise_idempotency_conflict()
+        return _replay_response(db, existing_batch)
+
+    validation_results: list[
+        tuple[TransactionRecordV1 | None, list[str], list[dict[str, str]]]
+    ] = []
+    valid_source_ids: set[str] = set()
+    for raw_record in raw_records:
+        try:
+            validated_record = TransactionRecordV1.model_validate(raw_record)
+        except ValidationError as error:
+            codes, details = rejection_details(error)
+            validation_results.append((None, codes, details))
+        else:
+            validation_results.append((validated_record, [], []))
+            valid_source_ids.add(validated_record.source_record_id)
+
+    stored_transactions = (
+        db.scalars(
+            select(FinancialTransaction).where(
+                FinancialTransaction.account_id == account.id,
+                FinancialTransaction.source_record_id.in_(valid_source_ids),
+            )
+        ).all()
+        if valid_source_ids
+        else []
+    )
+    stored_by_source_id = {
+        transaction.source_record_id: transaction for transaction in stored_transactions
+    }
+
+    batch_id = uuid4()
     batch = IngestionBatch(
         id=batch_id,
         record_kind=IngestionRecordKind.TRANSACTION,
         source_system=metadata.source_system,
         schema_version=metadata.schema_version,
-        idempotency_key=f"day5-generated-{uuid4()}",
-        payload_sha256=canonical_sha256(payload),
+        idempotency_key=idempotency_key,
+        payload_sha256=payload_sha256,
         original_filename=_safe_filename(original_filename),
         status=IngestionBatchStatus.PROCESSING,
         source_count=len(raw_records),
@@ -312,12 +503,16 @@ def ingest_transactions(
     results: list[IngestionRecordResult] = []
     accepted_count = 0
     rejected_count = 0
+    duplicate_count = 0
+    conflict_count = 0
+    accepted_in_batch: dict[str, TransactionRecordV1] = {}
 
-    for row_number, raw_record in enumerate(raw_records, start=1):
+    for row_number, (raw_record, validation) in enumerate(
+        zip(raw_records, validation_results, strict=True), start=1
+    ):
+        record, reason_codes, details = validation
         record_id = uuid4()
         transaction_id: UUID | None = None
-        reason_codes: list[str] = []
-        details: list[dict[str, str]] = []
         outcome = IngestionRecordOutcome.ACCEPTED
         source_record_id = raw_record.get("source_record_id")
         safe_source_record_id = (
@@ -326,31 +521,53 @@ def ingest_transactions(
             else None
         )
 
-        try:
-            record = TransactionRecordV1.model_validate(raw_record)
-        except ValidationError as error:
+        if record is None:
             outcome = IngestionRecordOutcome.REJECTED
-            reason_codes, details = rejection_details(error)
             rejected_count += 1
         else:
-            transaction_id = uuid4()
-            financial_facts.append(
-                FinancialTransaction(
-                    id=transaction_id,
-                    account_id=account.id,
-                    batch_id=batch_id,
-                    source_record_id=record.source_record_id,
-                    source_reference=record.source_reference,
-                    amount=record.decimal_amount,
-                    currency=record.currency,
-                    direction=record.direction,
-                    status=record.status,
-                    instrument_fingerprint=record.instrument_fingerprint,
-                    occurred_at=record.occurred_at,
+            prior_record = accepted_in_batch.get(record.source_record_id)
+            prior_transaction = stored_by_source_id.get(record.source_record_id)
+            prior_signature = (
+                _normalized_record_signature(prior_record)
+                if prior_record is not None
+                else (
+                    _stored_transaction_signature(prior_transaction)
+                    if prior_transaction is not None
+                    else None
                 )
             )
             safe_source_record_id = record.source_record_id
-            accepted_count += 1
+            if prior_signature is not None:
+                current_signature = _normalized_record_signature(record)
+                if current_signature == prior_signature:
+                    outcome = IngestionRecordOutcome.DUPLICATE
+                    reason_codes = ["DUPLICATE_SOURCE_RECORD"]
+                    details = [_source_record_detail("DUPLICATE_SOURCE_RECORD")]
+                    duplicate_count += 1
+                else:
+                    outcome = IngestionRecordOutcome.CONFLICT
+                    reason_codes = ["CONFLICTING_SOURCE_RECORD"]
+                    details = [_source_record_detail("CONFLICTING_SOURCE_RECORD")]
+                    conflict_count += 1
+            else:
+                transaction_id = uuid4()
+                financial_facts.append(
+                    FinancialTransaction(
+                        id=transaction_id,
+                        account_id=account.id,
+                        batch_id=batch_id,
+                        source_record_id=record.source_record_id,
+                        source_reference=record.source_reference,
+                        amount=record.decimal_amount,
+                        currency=record.currency,
+                        direction=record.direction,
+                        status=record.status,
+                        instrument_fingerprint=record.instrument_fingerprint,
+                        occurred_at=record.occurred_at,
+                    )
+                )
+                accepted_in_batch[record.source_record_id] = record
+                accepted_count += 1
 
         evidence_records.append(
             IngestionRecord(
@@ -380,17 +597,32 @@ def ingest_transactions(
 
     batch.accepted_count = accepted_count
     batch.rejected_count = rejected_count
+    batch.duplicate_count = duplicate_count
+    batch.conflict_count = conflict_count
     batch.status = (
         IngestionBatchStatus.COMPLETED_WITH_ERRORS
-        if rejected_count
+        if rejected_count or duplicate_count or conflict_count
         else IngestionBatchStatus.COMPLETED
     )
     batch.finished_at = now
     try:
-        # Explicit flush boundaries preserve foreign-key ordering even though the
-        # models intentionally expose UUID identifiers rather than ORM relationships.
         db.add(batch)
         db.flush()
+    except IntegrityError:
+        db.rollback()
+        concurrent_batch = db.scalar(
+            select(IngestionBatch).where(
+                IngestionBatch.source_system == metadata.source_system,
+                IngestionBatch.idempotency_key == idempotency_key,
+            )
+        )
+        if concurrent_batch is not None:
+            if concurrent_batch.payload_sha256 != payload_sha256:
+                _raise_idempotency_conflict()
+            return _replay_response(db, concurrent_batch)
+        raise
+
+    try:
         if financial_facts:
             db.add_all(financial_facts)
             db.flush()
@@ -400,15 +632,7 @@ def ingest_transactions(
         db.rollback()
         raise
 
-    return IngestionBatchResponse(
-        batch_id=batch_id,
-        schema_version=metadata.schema_version,
-        status=batch.status,
-        source_count=len(raw_records),
-        accepted_count=accepted_count,
-        rejected_count=rejected_count,
-        records=results,
-    )
+    return _batch_response(batch, results, idempotent_replay=False)
 
 
 router = APIRouter(prefix="/api/v1/ingestion/transactions", tags=["transaction ingestion"])
@@ -417,15 +641,23 @@ router = APIRouter(prefix="/api/v1/ingestion/transactions", tags=["transaction i
 @router.post("/json", response_model=IngestionBatchResponse, status_code=status.HTTP_201_CREATED)
 def ingest_json_transactions(
     request: TransactionJsonBatchRequest,
+    response: Response,
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", pattern=IDEMPOTENCY_KEY_PATTERN)
+    ],
     principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.INGESTION_WRITE))],
     db: Annotated[Session, Depends(get_db)],
 ) -> IngestionBatchResponse:
     metadata = IngestionBatchMetadata.model_validate(request.model_dump(exclude={"records"}))
-    return ingest_transactions(db, metadata, request.records, principal)
+    result = ingest_transactions(db, metadata, request.records, principal, idempotency_key)
+    if result.idempotent_replay:
+        response.status_code = status.HTTP_200_OK
+    return result
 
 
 @router.post("/csv", response_model=IngestionBatchResponse, status_code=status.HTTP_201_CREATED)
 async def ingest_csv_transactions(
+    response: Response,
     schema_version: Annotated[Literal["1.0"], Form()],
     source_system: Annotated[
         str, Form(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -435,6 +667,9 @@ async def ingest_csv_transactions(
         Form(min_length=1, max_length=160, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$"),
     ],
     file: Annotated[UploadFile, File()],
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", pattern=IDEMPOTENCY_KEY_PATTERN)
+    ],
     principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.INGESTION_WRITE))],
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -451,4 +686,7 @@ async def ingest_csv_transactions(
         source_system=source_system,
         source_account_id=source_account_id,
     )
-    return ingest_transactions(db, metadata, records, principal, file.filename)
+    result = ingest_transactions(db, metadata, records, principal, idempotency_key, file.filename)
+    if result.idempotent_replay:
+        response.status_code = status.HTTP_200_OK
+    return result
