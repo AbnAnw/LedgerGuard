@@ -32,6 +32,7 @@ dev = [
 
 [project.scripts]
 ledgerguard-seed = "ledgerguard.cli:seed"
+ledgerguard-seed-reconciliation = "ledgerguard.cli:seed_reconciliation"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ledgerguard"]

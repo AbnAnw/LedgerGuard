@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "account": {
+    "source_system": "synthetic-reconciliation",
+    "source_account_id": "DEMO-RECON-001"
+  },
+  "configuration": {
+    "input_cutoff_at": "2026-10-14T12:00:00Z",
+    "match_window_hours": 72
+  },
+  "expected_classifications": {
+    "exact_match": 1,
+    "partial_match": 1,
+    "missing_settlement": 1,
+    "duplicate_candidate": 1,
+    "unexplained_settlement": 1
+  },
+  "transactions": [
+    {"source_record_id": "RECON-TX-EXACT", "source_reference": "REF-EXACT", "amount": "100.000000", "currency": "USD", "status": "posted", "occurred_at": "2026-10-14T09:00:00Z"},
+    {"source_record_id": "RECON-TX-PARTIAL", "source_reference": "REF-PARTIAL", "amount": "100.000000", "currency": "USD", "status": "posted", "occurred_at": "2026-10-14T09:00:00Z"},
+    {"source_record_id": "RECON-TX-MISSING", "source_reference": "REF-MISSING", "amount": "30.000000", "currency": "USD", "status": "posted", "occurred_at": "2026-10-14T09:00:00Z"},
+    {"source_record_id": "RECON-TX-DUPLICATE", "source_reference": "REF-DUPLICATE", "amount": "20.000000", "currency": "USD", "status": "posted", "occurred_at": "2026-10-14T09:00:00Z"}
+  ],
+  "settlements": [
+    {"source_record_id": "RECON-ST-EXACT", "source_reference": "REF-EXACT", "amount": "100.000000", "currency": "USD", "status": "confirmed", "settled_at": "2026-10-14T10:00:00Z"},
+    {"source_record_id": "RECON-ST-PARTIAL", "source_reference": "REF-PARTIAL", "amount": "60.000000", "currency": "USD", "status": "confirmed", "settled_at": "2026-10-14T10:00:00Z"},
+    {"source_record_id": "RECON-ST-DUPLICATE-A", "source_reference": "REF-DUPLICATE", "amount": "20.000000", "currency": "USD", "status": "confirmed", "settled_at": "2026-10-14T10:00:00Z"},
+    {"source_record_id": "RECON-ST-DUPLICATE-B", "source_reference": "REF-DUPLICATE", "amount": "20.000000", "currency": "USD", "status": "confirmed", "settled_at": "2026-10-14T11:00:00Z"},
+    {"source_record_id": "RECON-ST-UNEXPLAINED", "source_reference": "REF-UNEXPLAINED", "amount": "15.000000", "currency": "USD", "status": "confirmed", "settled_at": "2026-10-14T10:00:00Z"}
+  ]
+}

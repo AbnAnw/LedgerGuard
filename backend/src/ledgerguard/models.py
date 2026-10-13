@@ -524,12 +524,17 @@ class ReconciliationResult(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Ba
             "transaction_total >= 0 AND settlement_total >= 0",
             name="ck_results_totals_nonnegative",
         ),
+        sa.CheckConstraint(
+            "difference_amount = settlement_total - transaction_total",
+            name="ck_results_difference_exact",
+        ),
         sa.CheckConstraint("evidence_sha256 ~ '^[0-9a-f]{64}$'", name="ck_results_evidence_hash"),
         sa.CheckConstraint(
             "(reviewed_at IS NULL) = (reviewed_by_user_id IS NULL)",
             name="ck_results_review_pair",
         ),
         sa.CheckConstraint("version > 0", name="ck_results_version_positive"),
+        sa.UniqueConstraint("run_id", "evidence_sha256", name="uq_results_run_evidence"),
         sa.Index("ix_results_run_classification", "run_id", "classification"),
         sa.Index("ix_results_review_created", "review_status", "created_at"),
         sa.Index(

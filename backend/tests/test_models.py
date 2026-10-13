@@ -3,7 +3,7 @@ from pathlib import Path
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 
-from ledgerguard.models import Base, FinancialTransaction, IngestionBatch
+from ledgerguard.models import Base, FinancialTransaction, IngestionBatch, ReconciliationResult
 
 EXPECTED_TABLES = {
     "accounts",
@@ -66,3 +66,12 @@ def test_ingestion_batch_has_database_idempotency_and_quality_guards() -> None:
     assert "uq_ingestion_batches_idempotency" in constraint_names
     assert "ck_batches_idempotency_key" in constraint_names
     assert "ck_batches_terminal_totals" in constraint_names
+
+
+def test_reconciliation_results_have_exact_arithmetic_and_deduplication_guards() -> None:
+    constraint_names = {
+        constraint.name for constraint in ReconciliationResult.__table__.constraints
+    }
+
+    assert "ck_results_difference_exact" in constraint_names
+    assert "uq_results_run_evidence" in constraint_names

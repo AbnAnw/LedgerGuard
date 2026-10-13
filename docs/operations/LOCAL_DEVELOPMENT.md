@@ -50,6 +50,31 @@ The CSV endpoint accepts `schema_version`, `source_system`, and `source_account_
 
 Processing remains synchronous and is limited to 10,000 rows and 2 MB by default. Configure the byte limit with `INGESTION_MAX_UPLOAD_BYTES`. Repeating the same key and content returns the original batch without creating rows; changing content while reusing the key returns HTTP 409. Use a new key to intentionally submit a new batch, where repeated source identifiers are classified as duplicates or conflicts.
 
+## Try deterministic reconciliation
+
+Seed the isolated synthetic Day 7 account and its transaction/settlement facts. The command is
+idempotent and refuses to run in production:
+
+```powershell
+docker compose exec api ledgerguard-seed-reconciliation
+```
+
+Using the analyst login and `$headers` from above, create a run:
+
+```powershell
+$request = @{
+    source_system = 'synthetic-reconciliation'
+    source_account_id = 'DEMO-RECON-001'
+    input_cutoff_at = '2026-10-14T12:00:00Z'
+    match_window_hours = 72
+} | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/reconciliation/runs -Headers $headers -ContentType 'application/json' -Body $request
+```
+
+The scenario returns one exact, partial, missing, duplicate-candidate, and unexplained result.
+Repeating the request returns the same run. Auditors may read the stored run but receive HTTP 403
+when creating one. See the [reconciliation v1 contract](../api/RECONCILIATION_V1.md).
+
 Stop services without deleting their named data volumes:
 
 ```powershell
@@ -97,6 +122,7 @@ Create schema:
 cd backend
 ./.venv/Scripts/alembic.exe upgrade head
 ./.venv/Scripts/ledgerguard-seed.exe
+./.venv/Scripts/ledgerguard-seed-reconciliation.exe
 ```
 
 Render the migration as PostgreSQL SQL without connecting to a database:

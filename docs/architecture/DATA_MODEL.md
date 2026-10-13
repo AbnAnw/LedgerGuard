@@ -203,7 +203,7 @@ Defines a reproducible reconciliation execution.
 | `algorithm_version` | `VARCHAR(40)` | Required |
 | `configuration` | `JSONB` | Required validated snapshot, including UTC match window |
 | `input_cutoff_at` | `TIMESTAMPTZ` | Required; freezes eligible input set |
-| `replay_key` | `CHAR(64)` | Required unique hash of account, version, configuration, and input cutoff |
+| `replay_key` | `CHAR(64)` | Required unique hash of account, version, configuration, input cutoff, and sorted immutable inputs |
 | `status` | `reconciliation_run_status` | Lifecycle below |
 | `requested_by_user_id` | `UUID` | Required FK to `users` |
 | `correlation_id` | `UUID` | Required |
@@ -211,7 +211,7 @@ Defines a reproducible reconciliation execution.
 | `created_at`, `started_at`, `finished_at` | `TIMESTAMPTZ` | UTC |
 | `version` | `INTEGER` | Required, positive |
 
-The unique replay key makes duplicate worker delivery return the existing run. Completed results never change when configuration changes; a new run is created.
+The unique replay key makes duplicate delivery return the existing run. A per-account row lock serializes input selection and persistence. Completed results never change when configuration or the eligible input set changes; a new run is created.
 
 ### `reconciliation_results` and item tables
 
@@ -233,7 +233,7 @@ Each result is one explainable matching group. Separate item tables support one-
 | `reviewed_by_user_id` | `UUID` | Nullable FK to `users`; paired with review time |
 | `version` | `INTEGER` | Required, positive |
 
-`reconciliation_result_transactions` has composite PK `(result_id, transaction_id)` plus `item_role` (`matched` or `candidate`) and nullable positive `allocated_amount`. `reconciliation_result_settlements` mirrors it with `settlement_id`. All matched items share the result currency. A result must contain the entity sides required by its classification; the reconciliation service enforces this atomically and tests every shape.
+The database requires `difference_amount = settlement_total - transaction_total` and unique `(run_id, evidence_sha256)` values. `reconciliation_result_transactions` has composite PK `(result_id, transaction_id)` plus `item_role` (`matched` or `candidate`) and nullable positive `allocated_amount`. `reconciliation_result_settlements` mirrors it with `settlement_id`. All matched items share the result currency. A result must contain the entity sides required by its classification; the reconciliation service enforces this atomically and tests every shape.
 
 ### `fraud_rules` and `fraud_rule_versions`
 

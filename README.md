@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 6 is complete: transaction ingestion is retry-safe through client idempotency keys and canonical payload fingerprints. Repeated source records are deterministically classified as duplicates or conflicts, PostgreSQL reinforces uniqueness and terminal totals, and every response includes a batch-level quality summary.
+Day 7 is complete: a versioned reconciliation engine deterministically classifies exact, partial, missing, duplicate-candidate, and unexplained outcomes. Runs retain canonical evidence and reason codes, are replay-safe, enforce role boundaries, and use decimal-only totals with PostgreSQL integrity checks.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -78,6 +78,8 @@ See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migra
 
 After signing in as the synthetic analyst, submit either published fixture under `sample-data/` to the matching `/api/v1/ingestion/transactions/json` or `/api/v1/ingestion/transactions/csv` endpoint. The [version 1 ingestion contract](docs/api/TRANSACTION_INGESTION_V1.md) documents exact fields, outcomes, and stable rejection codes.
 
+Run `docker compose exec api ledgerguard-seed-reconciliation` to add the isolated synthetic Day 7 scenario, then create a run through `POST /api/v1/reconciliation/runs`. The [version 1 reconciliation contract](docs/api/RECONCILIATION_V1.md) documents eligibility, matching, evidence, replay, and permissions.
+
 ## Engineering principles
 
 - Monetary values use decimal-safe representations end to end; binary floating point is forbidden for money.
@@ -100,6 +102,7 @@ After signing in as the synthetic analyst, submit either published fixture under
 - `docs/operations/LOCAL_DEVELOPMENT.md` — current development environment and safety rules
 - `docs/api/TRANSACTION_INGESTION_V1.md` — versioned JSON/CSV ingestion contract and rejection catalogue
 - `docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md` — retry, duplicate, conflict, fingerprint, and quality-summary semantics
+- `docs/api/RECONCILIATION_V1.md` — deterministic matching, evidence, replay, and permission contract
 
 ## License and usage
 

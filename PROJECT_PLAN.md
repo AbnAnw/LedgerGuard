@@ -105,7 +105,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 7 — Reconciliation engine version 1
 
-**Status: Not started**
+**Status: Complete**
 
 - Match transactions against settlements using reference, decimal amount, currency, and a documented UTC time window.
 - Classify exact matches, partial matches, missing settlements, duplicate candidates, and unexplained settlements.

@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 6 — Idempotency and data-quality controls: Complete**
+**Day 7 — Reconciliation engine version 1: Complete**
 
 ## Completed days
 
@@ -12,10 +12,11 @@
 - **Day 4 (2026-10-09):** Added Argon2id password hashing, opaque bearer sessions stored as keyed digests, PostgreSQL-backed expiry and logout revocation, login lockout handling, synthetic demonstration users, deny-by-default permissions, protected API boundaries, and a role-aware interface.
 - **Day 5 (2026-10-13):** Added authenticated JSON and CSV transaction ingestion through one versioned validation pipeline; decimal-safe amounts, UTC normalization, identifier/currency/status validation, accepted financial facts, persisted rejection evidence, bounded uploads, published synthetic fixtures, and integration-proven role enforcement.
 - **Day 6 (2026-10-13):** Added required client idempotency keys, canonical batch and row payload fingerprints, exact-retry replay, changed-payload conflict handling, normalized source-record duplicate/conflict classification, account-level concurrency serialization, deterministic batch-quality summaries, and reinforcing PostgreSQL checks.
+- **Day 7 (2026-10-14):** Added deterministic transaction-to-settlement reconciliation with exact, partial, missing, duplicate-candidate, and unexplained classifications; stored canonical evidence and reason codes; replay-safe runs; role-protected create/read APIs; an isolated synthetic demonstration scenario; and exact-arithmetic database constraints.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform and loads mounted Python source explicitly for reliable local iteration. SQLAlchemy implements the domain model; four Alembic revisions provide the 20-table initial schema, revocable authentication sessions, structured ingestion evidence, terminal quality-total checks, database uniqueness, and an append-only audit trigger. FastAPI is the authorization boundary, while the interface mirrors role access without persisting bearer tokens in browser storage. The synchronous ingestion module accepts JSON or CSV through one schema-versioned, retry-safe validation and persistence path; Celery processing remains scheduled for Day 9. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform and loads mounted Python source explicitly for reliable local iteration. SQLAlchemy implements the domain model; five Alembic revisions provide the 20-table initial schema, revocable authentication sessions, structured ingestion evidence, quality-total and reconciliation-arithmetic checks, database uniqueness, and an append-only audit trigger. FastAPI is the authorization boundary, while the interface mirrors role access without persisting bearer tokens in browser storage. The synchronous ingestion module accepts JSON or CSV through one schema-versioned, retry-safe validation path. The synchronous reconciliation module selects an immutable UTC-cutoff input set, partitions candidate relationships deterministically, and persists versioned evidence; Celery execution remains scheduled for Day 9. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -48,6 +49,10 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Compare normalized source reference, `Decimal` amount, currency, direction, status, UTC occurrence time, and fingerprint when classifying duplicate versus conflicting source identifiers. Neither outcome creates a new financial fact.
 - Lock the active source-account row during classification so concurrent deliveries for one account cannot race past the existing-transaction check.
 - Report clean/issues status, accepted/rejected/duplicate/conflict counts, issue count, a two-decimal string acceptance percentage, and deterministic reason counts without binary floating-point arithmetic.
+- Reconcile only posted transactions and confirmed settlements at or before a caller-supplied UTC cutoff. Candidate settlements must have equal reference and currency and occur from zero through the configured 1–168 hour window after the transaction.
+- Partition the candidate graph deterministically. One-to-one equal amounts are exact; connected non-duplicate groups are partial; isolated facts are missing/unexplained; multiple equal-amount counterparts are duplicate candidates.
+- Hash the algorithm version, account, cutoff, configuration, and sorted immutable input facts into a unique replay key. Exact repeated runs return stored results without new rows.
+- Store canonical evidence, stable reason codes, decimal totals, and every result-item link. PostgreSQL enforces exact difference arithmetic and unique evidence within each run.
 
 ## Commands required to run the system
 
@@ -70,13 +75,38 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-04.ps1
 ./scripts/validate-day-05.ps1
 ./scripts/validate-day-06.ps1
+./scripts/validate-day-07.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
 
+Seed the isolated deterministic reconciliation scenario after the normal development seed:
+
+```powershell
+docker compose exec api ledgerguard-seed-reconciliation
+```
+
 The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerguard.invalid`, and `auditor@ledgerguard.invalid` with the local-only password `DemoOnly!ChangeMe123456`. Override `DEMO_USER_PASSWORD` in `.env` before sharing the environment.
 
 ## Test and coverage results
+
+- Day 7 backend formatting: passed; 25 source, test, and migration files were already formatted after the implementation corrections.
+- Day 7 backend linting: passed with no Ruff findings.
+- Day 7 strict type checking: passed; no issues in 11 source files.
+- Day 7 focused reconciliation/model tests: 14 passed in 1.56 seconds on Python 3.12.8.
+- Day 7 complete backend suite: 68 passed in 5.80 seconds. Measured statement coverage was 85% overall (1,294 statements, 193 missed), 77% for reconciliation (266 statements, 62 missed), and 97% for ingestion. One upstream Starlette/AnyIO deprecation warning remains.
+- Day 7 frontend regression checks: ESLint and TypeScript checking passed; 4 tests passed in one Vitest file; the production build transformed 16 modules and produced a 147.11 kB JavaScript bundle (48.08 kB gzip); the locked dependency audit found 0 known vulnerabilities.
+- Complete Alembic offline render: passed; 537 SQL lines rendered all five revisions through `20261014_0005`, including exact-difference and per-run evidence uniqueness constraints.
+- Day 7 migration and seed: Alembic reported `20261014_0005 (head)`; both the base seed and isolated reconciliation seed completed successfully, and running the reconciliation seed twice created no duplicate facts.
+- Live seeded reconciliation: HTTP 201 created five results covering exact, partial, missing, duplicate-candidate, and unexplained classifications exactly once; four transactions totalled `250.000000` USD and five settlements totalled `215.000000` USD.
+- Live replay path: an identical request returned HTTP 200, the original run ID, and `replayed: true`; PostgreSQL retained one completed run for that replay key with five results, four unique transaction links, and five unique settlement links.
+- Live role boundaries: an auditor read the stored evidence with HTTP 200 and was denied run creation with HTTP 403.
+- Live database safeguards: PostgreSQL rejected an incorrect difference through `ck_results_difference_exact`, retained zero invalid differences, and rejected a repeated evidence digest through `uq_results_run_evidence`.
+- Live platform check: all five Compose services started; API, PostgreSQL, Redis, and worker reported healthy.
+- Day 1–7 structural validators: passed.
+- Final Markdown local-link validation: passed; 21 Markdown files checked with no broken local links.
+- Final secret-pattern review: passed; 92 tracked or unignored paths checked with no matching private-key, AWS access-key, GitHub token, OpenAI-style API-key, or Google API-key patterns.
+- Final Git whitespace/error check: passed with no findings.
 
 - Day 1 structural/specification validation: passed; 19 required paths, 21 roadmap days, required product topics, placeholder environment values, synthetic-data notice, and `main` branch verified.
 - Git whitespace/error check: passed with no findings.
@@ -163,19 +193,21 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
 - The pinned Starlette test client emits one upstream AnyIO deprecation warning. It does not fail the test suite.
 - Day 5 parsing is synchronous and capped at 10,000 records and 2 MB by default; background parsing, progress, retries, and large-batch behaviour are scheduled for Day 9.
+- Day 7 reconciliation is synchronous; queue progress, retries, cancellation, and large-run behaviour remain Day 9 scope.
+- The isolated Day 7 settlement facts are loaded by a production-blocked synthetic seeder. A public settlement-ingestion contract is not yet implemented and must exist before production deployment.
 - A commit cannot embed its own final Git hash without changing that hash. This file therefore identifies the latest completed daily commit as `HEAD`; the exact short hash is reported after commit and can always be resolved with `git rev-parse --short HEAD`.
 
 ## Blockers
 
-None for Day 6.
+None for Day 7.
 
 ## Notion synchronization
 
-Day 6 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
+Day 7 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
 
 ## Next day's objective
 
-Day 7 will implement deterministic reconciliation against settlements using reference, decimal amount, currency, and a documented UTC time window, with stored candidate evidence and explainable classifications.
+Day 8 will add authentication-aware analyst navigation, summary cards, batch state, discrepancy filters and sorting, transaction/result details, and accessible loading, empty, validation, forbidden, and error states.
 
 ## Latest commit hash
 
