@@ -302,7 +302,7 @@ def test_auditor_can_read_stored_reconciliation_evidence(
     app.dependency_overrides[get_current_principal] = lambda: principal("auditor")
     app.dependency_overrides[get_db] = lambda: db
     monkeypatch.setattr(
-        "ledgerguard.reconciliation._run_response",
+        "ledgerguard.reconciliation.load_reconciliation_run_response",
         lambda _db, _run, _account, replayed: empty_response(replayed=replayed),
     )
 

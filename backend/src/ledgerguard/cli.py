@@ -121,7 +121,8 @@ def seed_reconciliation() -> None:
     if settings.app_env == "production":
         raise RuntimeError("Synthetic reconciliation data cannot be seeded in production")
 
-    base_time = datetime(2026, 10, 14, 9, 0, tzinfo=UTC)
+    # Keep the fixed fixture safely in the past so "run now" is meaningful in every time zone.
+    base_time = datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
     transaction_rows = [
         ("RECON-TX-EXACT", "REF-EXACT", Decimal("100.000000")),
         ("RECON-TX-PARTIAL", "REF-PARTIAL", Decimal("100.000000")),

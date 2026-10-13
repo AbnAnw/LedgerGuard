@@ -18,8 +18,8 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 4 | Authentication and role-based access | **Complete** |
 | Day 5 | Transaction ingestion | **Complete** |
 | Day 6 | Idempotency and data-quality controls | **Complete** |
-| Day 7 | Reconciliation engine version 1 | **Not started** |
-| Day 8 | Analyst dashboard | **Not started** |
+| Day 7 | Reconciliation engine version 1 | **Complete** |
+| Day 8 | Analyst dashboard | **Complete** |
 | Day 9 | Background processing | **Not started** |
 | Day 10 | Fraud rule engine | **Not started** |
 | Day 11 | Case-management workflow | **Not started** |
@@ -116,7 +116,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 8 — Analyst dashboard
 
-**Status: Not started**
+**Status: Complete**
 
 - Build authentication-aware navigation and role-specific screens.
 - Add reconciliation summary cards, batch status, filters, sortable tables, and transaction details.

@@ -514,7 +514,7 @@ def _result_response(db: Session, result: ReconciliationResult) -> Reconciliatio
     )
 
 
-def _run_response(
+def load_reconciliation_run_response(
     db: Session, run: ReconciliationRun, account: Account, *, replayed: bool
 ) -> ReconciliationRunResponse:
     results = list(
@@ -613,7 +613,7 @@ def execute_reconciliation(
         select(ReconciliationRun).where(ReconciliationRun.replay_key == replay_key)
     )
     if existing is not None:
-        return _run_response(db, existing, account, replayed=True)
+        return load_reconciliation_run_response(db, existing, account, replayed=True)
 
     decisions = build_reconciliation_decisions(
         transaction_facts, settlement_facts, request.match_window_hours
@@ -692,13 +692,15 @@ def execute_reconciliation(
             concurrent_account = db.get(Account, concurrent.account_id)
             if concurrent_account is None:
                 raise RuntimeError("Reconciliation run references a missing account") from None
-            return _run_response(db, concurrent, concurrent_account, replayed=True)
+            return load_reconciliation_run_response(
+                db, concurrent, concurrent_account, replayed=True
+            )
         raise
     except SQLAlchemyError:
         db.rollback()
         raise
 
-    return _run_response(db, run, account, replayed=False)
+    return load_reconciliation_run_response(db, run, account, replayed=False)
 
 
 router = APIRouter(prefix="/api/v1/reconciliation", tags=["reconciliation"])
@@ -733,4 +735,4 @@ def read_reconciliation_run(
     account = db.get(Account, run.account_id)
     if account is None:
         raise RuntimeError("Reconciliation run references a missing account")
-    return _run_response(db, run, account, replayed=False)
+    return load_reconciliation_run_response(db, run, account, replayed=False)

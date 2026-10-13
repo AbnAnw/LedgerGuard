@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from ledgerguard import __version__
 from ledgerguard.auth import access_router, auth_router
 from ledgerguard.config import get_settings
+from ledgerguard.dashboard import router as dashboard_router
 from ledgerguard.health import ReadinessState, probe_dependencies
 from ledgerguard.ingestion import router as ingestion_router
 from ledgerguard.reconciliation import router as reconciliation_router
@@ -32,6 +33,7 @@ app.include_router(auth_router)
 app.include_router(access_router)
 app.include_router(ingestion_router)
 app.include_router(reconciliation_router)
+app.include_router(dashboard_router)
 
 
 class LiveResponse(BaseModel):

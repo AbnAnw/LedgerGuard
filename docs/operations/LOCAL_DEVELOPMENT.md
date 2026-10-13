@@ -75,6 +75,18 @@ The scenario returns one exact, partial, missing, duplicate-candidate, and unexp
 Repeating the request returns the same run. Auditors may read the stored run but receive HTTP 403
 when creating one. See the [reconciliation v1 contract](../api/RECONCILIATION_V1.md).
 
+## Use the analyst dashboard
+
+Open `http://localhost:5173`, sign in as `analyst@ledgerguard.invalid`, and use the reconciliation
+workspace to review summary values, batch quality, prioritised discrepancies, and canonical evidence.
+The default sort puts non-exact results with the greatest unresolved exposure first. All displayed
+times are labelled UTC and all money remains decimal strings; the browser uses scaled `BigInt` only
+for ordering. Sign in as the synthetic auditor to verify the same evidence is read-only.
+
+The dashboard selects the completed run with the newest effective input cutoff. Creating a
+historical run later therefore cannot replace newer operational evidence. The fixed reconciliation
+fixture is intentionally dated in the past so a clean-clone “run now” includes it.
+
 Stop services without deleting their named data volumes:
 
 ```powershell

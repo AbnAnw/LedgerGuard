@@ -8,6 +8,7 @@ import {
   type AuthUser,
   type LivenessResponse,
 } from "./api";
+import { Dashboard } from "./Dashboard";
 import "./styles.css";
 
 type ConnectionState =
@@ -113,9 +114,16 @@ export function App() {
         </a>
         <div className="topbar-actions">
           {auth.kind === "signed_in" ? (
-            <button className="text-button" onClick={() => void handleLogout()} type="button">
-              Sign out
-            </button>
+            <>
+              <div className="nav-links">
+                {auth.user.permissions.includes("reconciliation:read") ? <a href="#dashboard">Dashboard</a> : null}
+                {auth.user.permissions.includes("reconciliation:read") ? <a href="#evidence">Evidence</a> : null}
+                {auth.user.roles.includes("administrator") ? <a href="#access-heading">Administration</a> : null}
+              </div>
+              <button className="text-button" onClick={() => void handleLogout()} type="button">
+                Sign out
+              </button>
+            </>
           ) : null}
           <span className={`service-status service-status--${connection.kind}`} role="status">
             <span className="status-dot" aria-hidden="true" />
@@ -188,6 +196,10 @@ export function App() {
           </div>
         )}
       </section>
+
+      {auth.kind === "signed_in" && auth.user.permissions.includes("reconciliation:read") ? (
+        <Dashboard token={auth.token} user={auth.user} />
+      ) : null}
 
       <section aria-labelledby="foundation-heading" className="foundation">
         <div className="section-heading">
