@@ -19,11 +19,11 @@ LedgerGuard hashes the canonical batch payload with SHA-256. JSON object key ord
 
 | Situation | HTTP result | Persistence result |
 | --- | --- | --- |
-| New key and payload | `201 Created` | One batch and its record outcomes are committed |
-| Existing key and identical payload hash | `200 OK` | Existing batch and record outcomes are returned; no rows are created |
+| New key and payload | `202 Accepted` | One durable job is committed and published; financial processing continues in Celery |
+| Existing key and identical payload hash | `200 OK` | Existing job is returned and a queued job is safely republished; no duplicate job is created |
 | Existing key and different payload hash | `409 Conflict` with `IDEMPOTENCY_KEY_REUSED` | No rows are created or changed |
 
-PostgreSQL uniqueness on `(source_system, idempotency_key)` is the final concurrency guard. The service also locks the selected source account while classifying records so concurrent deliveries for one account cannot create two facts for one source identifier.
+The durable job owns a unique hash of `(kind, source_system, idempotency_key)` and the ingestion batch retains PostgreSQL uniqueness on `(source_system, idempotency_key)`. The service also locks the selected source account while classifying records so concurrent deliveries for one account cannot create two facts for one source identifier.
 
 ## Source-record outcomes
 
@@ -42,7 +42,7 @@ The same rules apply to repeated identifiers within one batch and identifiers al
 
 ## Batch quality summary
 
-Every successful new or replayed response includes:
+Every completed or replayed batch persists:
 
 - accepted, rejected, duplicate, and conflict counts;
 - issue count (`rejected + duplicate + conflict`);
@@ -60,7 +60,7 @@ The batch, accepted financial facts, and every row outcome commit in one databas
 
 Day 6 is complete only when automated and live checks prove:
 
-1. an exact retry returns the original batch and creates no additional batch, record, or transaction;
+1. an exact request retry returns the original job and duplicate worker delivery creates no additional batch, record, or transaction;
 2. reusing a key for changed content returns `409` and creates nothing;
 3. same-batch and prior-batch duplicates create no new financial fact;
 4. same-batch and prior-batch conflicts create no new financial fact;

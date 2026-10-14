@@ -10,6 +10,7 @@ EXPECTED_TABLES = {
     "alerts",
     "auth_sessions",
     "audit_events",
+    "background_jobs",
     "case_alerts",
     "case_comments",
     "case_status_history",

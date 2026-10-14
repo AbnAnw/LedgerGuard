@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   AuthUser,
+  BackgroundJob,
   DashboardOverview,
   ReconciliationClassification,
   ReconciliationResult,
@@ -164,6 +165,32 @@ function response(body: unknown, status = 200) {
   });
 }
 
+function reconciliationJob(status: BackgroundJob["status"]): BackgroundJob {
+  const terminal = status === "succeeded" || status === "failed" || status === "cancelled";
+  return {
+    job_id: "00000000-0000-0000-0000-000000000900",
+    kind: "reconciliation",
+    status,
+    replayed: false,
+    progress_current: status === "succeeded" ? 3 : 1,
+    progress_total: 3,
+    progress_percent: status === "succeeded" ? 100 : 33,
+    attempt_count: 1,
+    max_attempts: 3,
+    status_message:
+      status === "succeeded" ? "Processing completed successfully." : "Loading facts.",
+    failure_code: null,
+    failure_detail: null,
+    cancellation_requested: false,
+    ingestion_batch_id: null,
+    reconciliation_run_id:
+      status === "succeeded" ? "00000000-0000-0000-0000-000000000100" : null,
+    created_at: "2026-10-14T12:00:00Z",
+    started_at: "2026-10-14T12:00:01Z",
+    finished_at: terminal ? "2026-10-14T12:00:02Z" : null,
+  };
+}
+
 describe("Dashboard", () => {
   afterEach(() => {
     cleanup();
@@ -254,5 +281,32 @@ describe("Dashboard", () => {
       "Match window must be a whole number from 1 to 168.",
     );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("queues reconciliation, displays durable progress, and refreshes completed results", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => "00000000-0000-0000-0000-000000000901" });
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => response(overview()))
+      .mockImplementationOnce(() => response(reconciliationJob("running"), 202))
+      .mockImplementationOnce(() => response(reconciliationJob("succeeded")))
+      .mockImplementationOnce(() => response(overview()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Dashboard token="token" user={analyst} />);
+    await screen.findByText("USD 250.000000");
+
+    fireEvent.click(screen.getByRole("button", { name: "Run reconciliation" }));
+    expect(await screen.findByText("Loading facts.")).toBeVisible();
+    expect(screen.getByText("33% · attempt 1 of 3")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+
+    expect(await screen.findByText("Background reconciliation completed.")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const reconciliationRequest = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(reconciliationRequest[1].method).toBe("POST");
+    expect(new Headers(reconciliationRequest[1].headers).get("Idempotency-Key")).toBe(
+      "dashboard-00000000-0000-0000-0000-000000000901",
+    );
   });
 });

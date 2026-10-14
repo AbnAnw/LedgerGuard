@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/1"
+    background_job_max_attempts: int = Field(default=3, ge=1, le=10)
+    background_job_soft_time_limit_seconds: int = Field(default=300, ge=30, le=3600)
+    background_job_hard_time_limit_seconds: int = Field(default=330, ge=31, le=3660)
     auth_secret_key: SecretStr = SecretStr("local-development-secret-change-before-use-0001")
     access_token_expire_minutes: int = Field(default=30, ge=5, le=1440)
     login_max_failures: int = Field(default=5, ge=3, le=20)
@@ -67,6 +70,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "DEMO_USER_PASSWORD must not use the local demonstration value in production"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_background_job_limits(self) -> "Settings":
+        if (
+            self.background_job_hard_time_limit_seconds
+            <= self.background_job_soft_time_limit_seconds
+        ):
+            raise ValueError("BACKGROUND_JOB_HARD_TIME_LIMIT_SECONDS must exceed the soft limit")
         return self
 
 

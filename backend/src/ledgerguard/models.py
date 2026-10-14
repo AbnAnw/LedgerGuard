@@ -113,6 +113,19 @@ class ReconciliationRunStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class BackgroundJobKind(str, Enum):
+    TRANSACTION_INGESTION = "transaction_ingestion"
+    RECONCILIATION = "reconciliation"
+
+
+class BackgroundJobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class ReconciliationClassification(str, Enum):
     EXACT_MATCH = "exact_match"
     PARTIAL_MATCH = "partial_match"
@@ -514,6 +527,67 @@ class ReconciliationRun(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base)
     failure_detail: Mapped[str | None] = mapped_column(sa.Text)
     started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+
+class BackgroundJob(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base):
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "deduplication_key ~ '^[0-9a-f]{64}$'", name="ck_jobs_deduplication_key"
+        ),
+        sa.CheckConstraint("request_sha256 ~ '^[0-9a-f]{64}$'", name="ck_jobs_request_hash"),
+        sa.CheckConstraint(
+            "progress_total >= 1 AND progress_current >= 0 "
+            "AND progress_current <= progress_total",
+            name="ck_jobs_progress",
+        ),
+        sa.CheckConstraint(
+            "attempt_count >= 0 AND max_attempts BETWEEN 1 AND 10",
+            name="ck_jobs_attempts",
+        ),
+        sa.CheckConstraint(
+            "NOT (ingestion_batch_id IS NOT NULL AND reconciliation_run_id IS NOT NULL)",
+            name="ck_jobs_single_result",
+        ),
+        sa.CheckConstraint(
+            "status NOT IN ('succeeded', 'failed', 'cancelled') OR finished_at IS NOT NULL",
+            name="ck_jobs_terminal_finished",
+        ),
+        sa.CheckConstraint("version > 0", name="ck_jobs_version_positive"),
+        sa.Index("ix_jobs_status_created", "status", "created_at"),
+        sa.Index("ix_jobs_requester_created", "requested_by_user_id", sa.desc("created_at")),
+    )
+
+    kind: Mapped[BackgroundJobKind] = mapped_column(
+        enum_column(BackgroundJobKind, "background_job_kind"), nullable=False
+    )
+    status: Mapped[BackgroundJobStatus] = mapped_column(
+        enum_column(BackgroundJobStatus, "background_job_status"), nullable=False
+    )
+    deduplication_key: Mapped[str] = mapped_column(sa.String(64), nullable=False, unique=True)
+    request_sha256: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    requested_by_user_id: Mapped[UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    correlation_id: Mapped[UUID] = mapped_column(sa.Uuid, nullable=False)
+    celery_task_id: Mapped[str] = mapped_column(sa.String(80), nullable=False, unique=True)
+    progress_current: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="0")
+    progress_total: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="1")
+    attempt_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default="3")
+    status_message: Mapped[str | None] = mapped_column(sa.String(200))
+    failure_code: Mapped[str | None] = mapped_column(sa.String(80))
+    failure_detail: Mapped[str | None] = mapped_column(sa.String(500))
+    cancellation_requested_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    ingestion_batch_id: Mapped[UUID | None] = mapped_column(
+        sa.ForeignKey("ingestion_batches.id", ondelete="SET NULL")
+    )
+    reconciliation_run_id: Mapped[UUID | None] = mapped_column(
+        sa.ForeignKey("reconciliation_runs.id", ondelete="SET NULL")
+    )
 
 
 class ReconciliationResult(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base):

@@ -17,7 +17,7 @@ Related decisions: [ADR-0001: decimal money](../decisions/0001-decimal-money.md)
 - Evidence-bearing facts are not overwritten. Corrections create a new source record, rule version, result, history row, or audit event.
 - External source identifiers are unique within their documented source/account boundary, not assumed globally unique.
 - JSONB is used only for versioned source/evidence snapshots whose keys are validated by application schemas. Searchable business fields remain typed columns.
-- Every external request and background job carries a UUID `correlation_id`; job records additionally carry a `job_id` when Day 9 introduces task persistence.
+- Every external request and background job carries a UUID `correlation_id`; each durable job uses its UUID as the Celery task ID.
 - Foreign keys default to `RESTRICT`. Destructive cascades are prohibited for financial facts, evidence, cases, and audit history.
 - Application writes that change multiple related records use one PostgreSQL transaction.
 
@@ -29,6 +29,7 @@ Related decisions: [ADR-0001: decimal money](../decisions/0001-decimal-money.md)
 | Source accounts and ingestion | `accounts`, `ingestion_batches`, `ingestion_records` |
 | Financial facts | `transactions`, `settlements` |
 | Reconciliation | `reconciliation_runs`, `reconciliation_results`, `reconciliation_result_transactions`, `reconciliation_result_settlements` |
+| Background processing | `background_jobs` |
 | Fraud monitoring | `fraud_rules`, `fraud_rule_versions`, `alerts` |
 | Investigations | `cases`, `case_alerts`, `case_comments`, `case_status_history` |
 | Audit | `audit_events` |
@@ -212,6 +213,37 @@ Defines a reproducible reconciliation execution.
 | `version` | `INTEGER` | Required, positive |
 
 The unique replay key makes duplicate delivery return the existing run. A per-account row lock serializes input selection and persistence. Completed results never change when configuration or the eligible input set changes; a new run is created.
+
+### `background_jobs`
+
+Owns the durable state for asynchronous ingestion and reconciliation. Redis transports task
+identifiers but is not the source of truth.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | `UUID` | Primary key and Celery task ID |
+| `kind` | `VARCHAR(23)` | `transaction_ingestion` or `reconciliation` |
+| `status` | `VARCHAR(9)` | `queued`, `running`, `succeeded`, `failed`, or `cancelled` |
+| `deduplication_key` | `CHAR(64)` | Required unique canonical scope hash |
+| `request_sha256` | `CHAR(64)` | Required canonical request hash |
+| `payload` | `JSONB` | Validated work envelope; cleared at terminal state |
+| `requested_by_user_id` | `UUID` | Required FK to `users` |
+| `correlation_id` | `UUID` | Required |
+| `celery_task_id` | `VARCHAR(80)` | Required unique delivery identifier |
+| `progress_current`, `progress_total` | `INTEGER` | Non-negative and bounded by total |
+| `attempt_count`, `max_attempts` | `INTEGER` | Non-negative attempts; maximum from 1 through 10 |
+| `status_message` | `VARCHAR(200)` | Nullable safe operational summary |
+| `failure_code`, `failure_detail` | `VARCHAR(80)`, `VARCHAR(500)` | Nullable sanitized failure evidence |
+| `cancellation_requested_at`, `started_at`, `finished_at` | `TIMESTAMPTZ` | Nullable UTC lifecycle evidence |
+| `ingestion_batch_id` | `UUID` | Nullable FK to one ingestion result |
+| `reconciliation_run_id` | `UUID` | Nullable FK to one reconciliation result |
+| `created_at` | `TIMESTAMPTZ` | Required UTC creation time |
+| `version` | `INTEGER` | Required, positive |
+
+At most one result link may be present. Every terminal state requires `finished_at`. Row locking
+serializes claim and cancellation decisions. Terminal deliveries are no-ops; a running redelivery
+may resume the retained payload without increasing the logical attempt count, relying on the
+domain's account locks and idempotency guards for concurrent duplicate safety.
 
 ### `reconciliation_results` and item tables
 

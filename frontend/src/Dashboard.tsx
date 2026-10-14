@@ -4,7 +4,9 @@ import {
   ApiError,
   createReconciliationRun,
   fetchDashboard,
+  fetchBackgroundJob,
   type AuthUser,
+  type BackgroundJob,
   type DashboardOverview,
   type ReconciliationClassification,
   type ReconciliationResult,
@@ -19,7 +21,8 @@ type DashboardState =
 
 type RunState =
   | { kind: "idle" }
-  | { kind: "running" }
+  | { kind: "submitting" }
+  | { kind: "job"; job: BackgroundJob }
   | { kind: "error"; message: string }
   | { kind: "success"; message: string };
 
@@ -214,18 +217,36 @@ export function Dashboard({ token, user }: { token: string; user: AuthUser }) {
       setRunState({ kind: "error", message: "Match window must be a whole number from 1 to 168." });
       return;
     }
-    setRunState({ kind: "running" });
+    setRunState({ kind: "submitting" });
     try {
-      const run = await createReconciliationRun(token, parsedWindow);
-      setRunState({
-        kind: "success",
-        message: run.replayed ? "Existing run reused safely." : "Reconciliation completed.",
-      });
-      await load();
+      const job = await createReconciliationRun(token, parsedWindow);
+      setRunState({ kind: "job", job });
     } catch (error) {
       setRunState({
         kind: "error",
         message: error instanceof ApiError ? error.message : "Reconciliation could not be completed.",
+      });
+    }
+  }
+
+  async function handleRefreshJob(jobId: string) {
+    try {
+      const job = await fetchBackgroundJob(token, jobId);
+      if (job.status === "succeeded") {
+        setRunState({ kind: "success", message: "Background reconciliation completed." });
+        await load();
+      } else if (job.status === "failed" || job.status === "cancelled") {
+        setRunState({
+          kind: "error",
+          message: job.failure_detail ?? job.status_message ?? `Job ${job.status}.`,
+        });
+      } else {
+        setRunState({ kind: "job", job });
+      }
+    } catch (error) {
+      setRunState({
+        kind: "error",
+        message: error instanceof ApiError ? error.message : "Job status could not be loaded.",
       });
     }
   }
@@ -280,12 +301,35 @@ export function Dashboard({ token, user }: { token: string; user: AuthUser }) {
                 value={windowHours}
               />
               <span>hours</span>
-              <button className="primary-button" disabled={runState.kind === "running"} type="submit">
-                {runState.kind === "running" ? "Running…" : "Run reconciliation"}
+              <button
+                className="primary-button"
+                disabled={runState.kind === "submitting" || runState.kind === "job"}
+                type="submit"
+              >
+                {runState.kind === "submitting" ? "Queueing…" : "Run reconciliation"}
               </button>
             </div>
             {runState.kind === "error" ? <p className="form-error" role="alert">{runState.message}</p> : null}
             {runState.kind === "success" ? <p className="form-success" role="status">{runState.message}</p> : null}
+            {runState.kind === "job" ? (
+              <div className="job-progress" role="status">
+                <span>{runState.job.status_message ?? `Job ${runState.job.status}`}</span>
+                <progress max="100" value={runState.job.progress_percent}>
+                  {runState.job.progress_percent}%
+                </progress>
+                <small>
+                  {runState.job.progress_percent}% · attempt {runState.job.attempt_count} of{" "}
+                  {runState.job.max_attempts}
+                </small>
+                <button
+                  className="row-action"
+                  onClick={() => void handleRefreshJob(runState.job.job_id)}
+                  type="button"
+                >
+                  Refresh status
+                </button>
+              </div>
+            ) : null}
           </form>
         ) : null}
       </header>

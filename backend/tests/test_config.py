@@ -10,6 +10,9 @@ def test_default_settings_are_valid_for_local_development() -> None:
     assert settings.app_env == "development"
     assert settings.database_url.startswith("postgresql+psycopg://")
     assert settings.cors_origins == ["http://localhost:5173"]
+    assert settings.background_job_max_attempts == 3
+    assert settings.background_job_soft_time_limit_seconds == 300
+    assert settings.background_job_hard_time_limit_seconds == 330
 
 
 def test_non_postgresql_database_is_rejected() -> None:
@@ -32,5 +35,14 @@ def test_production_rejects_local_demo_password() -> None:
             app_env="production",
             auth_secret_key="production-shaped-secret-with-at-least-32-characters",
             demo_user_password="DemoOnly!ChangeMe123456",
+            _env_file=None,
+        )
+
+
+def test_background_job_hard_limit_must_exceed_soft_limit() -> None:
+    with pytest.raises(ValidationError, match="must exceed the soft limit"):
+        Settings(
+            background_job_soft_time_limit_seconds=300,
+            background_job_hard_time_limit_seconds=300,
             _env_file=None,
         )

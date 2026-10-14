@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
 from ledgerguard.db import get_db
+from ledgerguard.jobs import BackgroundJobResponse, enqueue_reconciliation_job
 from ledgerguard.models import (
     Account,
     AccountStatus,
@@ -706,17 +707,29 @@ def execute_reconciliation(
 router = APIRouter(prefix="/api/v1/reconciliation", tags=["reconciliation"])
 
 
-@router.post("/runs", response_model=ReconciliationRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/runs", response_model=BackgroundJobResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_reconciliation_run(
     request: ReconciliationRunRequest,
     response: Response,
+    idempotency_key: Annotated[
+        str,
+        Header(
+            alias="Idempotency-Key",
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$",
+        ),
+    ],
     principal: Annotated[
         AuthPrincipal, Depends(require_permissions(Permission.RECONCILIATION_WRITE))
     ],
     db: Annotated[Session, Depends(get_db)],
-) -> ReconciliationRunResponse:
-    result = execute_reconciliation(db, request, principal)
-    if result.replayed:
+) -> BackgroundJobResponse:
+    result, replayed = enqueue_reconciliation_job(
+        db,
+        request_payload=request.model_dump(mode="json"),
+        idempotency_key=idempotency_key,
+        principal=principal,
+    )
+    if replayed:
         response.status_code = status.HTTP_200_OK
     return result
 

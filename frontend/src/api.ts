@@ -108,6 +108,29 @@ export interface DashboardOverview {
   }>;
 }
 
+export type BackgroundJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface BackgroundJob {
+  job_id: string;
+  kind: "transaction_ingestion" | "reconciliation";
+  status: BackgroundJobStatus;
+  replayed: boolean;
+  progress_current: number;
+  progress_total: number;
+  progress_percent: number;
+  attempt_count: number;
+  max_attempts: number;
+  status_message: string | null;
+  failure_code: string | null;
+  failure_detail: string | null;
+  cancellation_requested: boolean;
+  ingestion_batch_id: string | null;
+  reconciliation_run_id: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -191,13 +214,15 @@ export async function fetchDashboard(
 export async function createReconciliationRun(
   token: string,
   matchWindowHours: number,
-): Promise<ReconciliationRun> {
+): Promise<BackgroundJob> {
+  const idempotencyKey = `dashboard-${crypto.randomUUID()}`;
   const response = await fetch(`${apiBaseUrl}/api/v1/reconciliation/runs`, {
     method: "POST",
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
     },
     body: JSON.stringify({
       source_system: dashboardAccount.sourceSystem,
@@ -214,5 +239,15 @@ export async function createReconciliationRun(
       response.status,
     );
   }
-  return (await response.json()) as ReconciliationRun;
+  return (await response.json()) as BackgroundJob;
+}
+
+export async function fetchBackgroundJob(token: string, jobId: string): Promise<BackgroundJob> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/jobs/${jobId}`, {
+    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new ApiError("Background job status could not be loaded.", response.status);
+  }
+  return (await response.json()) as BackgroundJob;
 }

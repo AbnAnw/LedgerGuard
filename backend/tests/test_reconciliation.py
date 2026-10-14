@@ -12,8 +12,14 @@ from sqlalchemy.orm import Session
 
 from ledgerguard.auth import AuthPrincipal, get_current_principal
 from ledgerguard.db import get_db
+from ledgerguard.jobs import BackgroundJobResponse
 from ledgerguard.main import app
-from ledgerguard.models import ReconciliationClassification, ReconciliationRunStatus
+from ledgerguard.models import (
+    BackgroundJobKind,
+    BackgroundJobStatus,
+    ReconciliationClassification,
+    ReconciliationRunStatus,
+)
 from ledgerguard.reconciliation import (
     ALGORITHM_VERSION,
     ReconciliationRunRequest,
@@ -36,6 +42,29 @@ def client() -> Iterator[TestClient]:
 
 def uid(value: int) -> UUID:
     return UUID(int=value)
+
+
+def queued_reconciliation_job(*, replayed: bool = False) -> BackgroundJobResponse:
+    return BackgroundJobResponse(
+        job_id=uid(800),
+        kind=BackgroundJobKind.RECONCILIATION,
+        status=BackgroundJobStatus.QUEUED,
+        replayed=replayed,
+        progress_current=0,
+        progress_total=3,
+        progress_percent=0,
+        attempt_count=0,
+        max_attempts=3,
+        status_message="Queued for worker delivery.",
+        failure_code=None,
+        failure_detail=None,
+        cancellation_requested=False,
+        ingestion_batch_id=None,
+        reconciliation_run_id=None,
+        created_at=BASE_TIME,
+        started_at=None,
+        finished_at=None,
+    )
 
 
 def transaction(
@@ -251,15 +280,17 @@ def test_request_rejects_naive_cutoff_and_normalizes_offsets_to_utc() -> None:
     assert request.input_cutoff_at == datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
 
 
-def test_analyst_can_create_run_and_replay_returns_http_200(
+def test_analyst_can_queue_run_and_exact_retry_returns_http_200(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app.dependency_overrides[get_current_principal] = lambda: principal("operations_analyst")
     app.dependency_overrides[get_db] = lambda: object()
-    responses = iter((empty_response(), empty_response(replayed=True)))
+    responses = iter(
+        ((queued_reconciliation_job(), False), (queued_reconciliation_job(replayed=True), True))
+    )
     monkeypatch.setattr(
-        "ledgerguard.reconciliation.execute_reconciliation",
-        lambda _db, _request, _principal: next(responses),
+        "ledgerguard.reconciliation.enqueue_reconciliation_job",
+        lambda *args, **kwargs: next(responses),
     )
     payload = {
         "source_system": "synthetic-demo",
@@ -268,10 +299,11 @@ def test_analyst_can_create_run_and_replay_returns_http_200(
         "match_window_hours": 72,
     }
 
-    created = client.post("/api/v1/reconciliation/runs", json=payload)
-    replayed = client.post("/api/v1/reconciliation/runs", json=payload)
+    headers = {"Idempotency-Key": "reconciliation-retry-key"}
+    created = client.post("/api/v1/reconciliation/runs", headers=headers, json=payload)
+    replayed = client.post("/api/v1/reconciliation/runs", headers=headers, json=payload)
 
-    assert created.status_code == 201
+    assert created.status_code == 202
     assert created.json()["replayed"] is False
     assert replayed.status_code == 200
     assert replayed.json()["replayed"] is True
@@ -282,6 +314,7 @@ def test_auditor_cannot_create_reconciliation_run(client: TestClient) -> None:
 
     response = client.post(
         "/api/v1/reconciliation/runs",
+        headers={"Idempotency-Key": "auditor-denied-key"},
         json={
             "source_system": "synthetic-demo",
             "source_account_id": "DEMO-ACCOUNT-001",

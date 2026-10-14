@@ -82,6 +82,15 @@ erDiagram
         string status
         uuid requested_by_user_id FK
     }
+    BACKGROUND_JOBS {
+        uuid id PK
+        string kind
+        string status
+        string deduplication_key UK
+        uuid requested_by_user_id FK
+        uuid ingestion_batch_id FK
+        uuid reconciliation_run_id FK
+    }
     RECONCILIATION_RESULTS {
         uuid id PK
         uuid run_id FK
@@ -174,6 +183,7 @@ erDiagram
     USERS ||--o{ USER_ROLES : administers
     USERS ||--o{ INGESTION_BATCHES : requests
     USERS ||--o{ RECONCILIATION_RUNS : requests
+    USERS ||--o{ BACKGROUND_JOBS : requests
     USERS ||--o{ FRAUD_RULES : creates
     USERS ||--o{ FRAUD_RULE_VERSIONS : authors
     USERS ||--o{ CASES : owns_or_creates
@@ -188,11 +198,13 @@ erDiagram
     INGESTION_BATCHES ||--o{ INGESTION_RECORDS : reports
     INGESTION_BATCHES ||--o{ TRANSACTIONS : accepts
     INGESTION_BATCHES ||--o{ SETTLEMENTS : accepts
+    INGESTION_BATCHES o|--o| BACKGROUND_JOBS : completes
     INGESTION_RECORDS o|--o| TRANSACTIONS : materializes
     INGESTION_RECORDS o|--o| SETTLEMENTS : materializes
     TRANSACTIONS o|--o{ TRANSACTIONS : reverses
 
     RECONCILIATION_RUNS ||--o{ RECONCILIATION_RESULTS : produces
+    RECONCILIATION_RUNS o|--o| BACKGROUND_JOBS : completes
     RECONCILIATION_RESULTS ||--o{ RECONCILIATION_RESULT_TRANSACTIONS : includes
     TRANSACTIONS ||--o{ RECONCILIATION_RESULT_TRANSACTIONS : participates
     RECONCILIATION_RESULTS ||--o{ RECONCILIATION_RESULT_SETTLEMENTS : includes
@@ -212,6 +224,7 @@ erDiagram
 ## Relationship notes
 
 - The two reconciliation item tables avoid unenforceable polymorphic foreign keys and support multiple matched or candidate facts per result.
+- `background_jobs` links to at most one domain result. Its payload is transient work state and is cleared after a terminal outcome; domain evidence remains in the linked tables.
 - `ingestion_records` links to at most one materialised fact. Invalid/duplicate/conflicting rows keep their evidence without creating a financial fact.
 - Rule versions, alerts, reconciliation results, comments, history, and audit events retain immutable evidence. Mutable aggregate summaries use optimistic concurrency.
 - `audit_events.target_type/target_id` is intentionally a logical reference: a single audit table can cover authentication attempts that have no target row and future entities without a polymorphic database foreign key.

@@ -20,7 +20,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 6 | Idempotency and data-quality controls | **Complete** |
 | Day 7 | Reconciliation engine version 1 | **Complete** |
 | Day 8 | Analyst dashboard | **Complete** |
-| Day 9 | Background processing | **Not started** |
+| Day 9 | Background processing | **Complete** |
 | Day 10 | Fraud rule engine | **Not started** |
 | Day 11 | Case-management workflow | **Not started** |
 | Day 12 | Audit logging | **Not started** |
@@ -127,7 +127,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 9 — Background processing
 
-**Status: Not started**
+**Status: Complete**
 
 - Move batch parsing and reconciliation into Celery jobs.
 - Add queued/running/succeeded/failed/cancelled states, progress, retries, timeouts, failure reasons, and practical cancellation.

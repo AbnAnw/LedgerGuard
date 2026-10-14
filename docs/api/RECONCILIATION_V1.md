@@ -7,12 +7,13 @@ with immutable confirmed settlements for one synthetic account. Every outcome st
 comparison criteria, reason code, algorithm version, configuration, and a canonical evidence
 hash needed to reproduce the decision.
 
-This version runs synchronously. Day 9 will move execution behind Celery without changing the
-matching contract.
+Day 9 runs this matching contract behind a durable Celery job. PostgreSQL remains authoritative
+for job and reconciliation evidence; Redis transports the job identifier.
 
 ## API contract
 
-`POST /api/v1/reconciliation/runs` requires `reconciliation:write` and accepts:
+`POST /api/v1/reconciliation/runs` requires `reconciliation:write`, an `Idempotency-Key` header,
+and accepts:
 
 ```json
 {
@@ -29,12 +30,14 @@ matching contract.
 - Only settlements with status `confirmed` and `settled_at <= input_cutoff_at` are eligible.
 - A settlement is a candidate for a transaction only when reference and currency are equal and
   its UTC timestamp is from zero through `match_window_hours` after the transaction timestamp.
-- A newly persisted run returns HTTP 201. Repeating the same account, cutoff, configuration, and
-  immutable input facts returns the original run with HTTP 200 and `replayed: true`.
+- A newly committed job returns HTTP 202. Repeating the same key and request returns the original
+  job with HTTP 200 and `replayed: true`; changed content under that key returns HTTP 409.
+- `GET /api/v1/jobs/{job_id}` exposes bounded progress, attempts, sanitized failures, cancellation
+  state, and the terminal `reconciliation_run_id` used to retrieve evidence.
 
 `GET /api/v1/reconciliation/runs/{run_id}` requires `reconciliation:read`. Administrators and
 operations analysts can create runs. Administrators, operations analysts, and auditors can read
-stored run evidence.
+stored run evidence and reconciliation job status. Auditors cannot submit or cancel jobs.
 
 ## Deterministic classification
 
@@ -70,7 +73,8 @@ only for a one-to-one exact match in v1.
 
 ## Idempotency and atomicity
 
-The replay key is SHA-256 over the algorithm version, account ID, normalized cutoff,
+The job deduplication key is scoped to reconciliation, source system, and caller-supplied
+idempotency key. The domain replay key is SHA-256 over the algorithm version, account ID, normalized cutoff,
 configuration, and the complete sorted immutable input set. The account row is locked while the
 run is created. A unique replay key is the final duplicate-delivery guard. The run, results, and
 item evidence commit atomically; failures roll back the complete unit.

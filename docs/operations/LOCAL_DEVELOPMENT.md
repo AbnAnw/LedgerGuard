@@ -43,12 +43,13 @@ Submit the valid JSON fixture:
 
 ```powershell
 $headers['Idempotency-Key'] = 'local-json-example-001'
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/ingestion/transactions/json -Headers $headers -ContentType 'application/json' -InFile ./sample-data/transactions-valid-v1.json
+$job = Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/ingestion/transactions/json -Headers $headers -ContentType 'application/json' -InFile ./sample-data/transactions-valid-v1.json
+Invoke-RestMethod -Method Get -Uri "http://localhost:8000/api/v1/jobs/$($job.job_id)" -Headers $headers
 ```
 
 The CSV endpoint accepts `schema_version`, `source_system`, and `source_account_id` as form fields alongside a `file` upload. OpenAPI at `http://localhost:8000/docs` provides an interactive form. Both endpoints use the same validation rules documented in the [version 1 ingestion contract](../api/TRANSACTION_INGESTION_V1.md).
 
-Processing remains synchronous and is limited to 10,000 rows and 2 MB by default. Configure the byte limit with `INGESTION_MAX_UPLOAD_BYTES`. Repeating the same key and content returns the original batch without creating rows; changing content while reusing the key returns HTTP 409. Use a new key to intentionally submit a new batch, where repeated source identifiers are classified as duplicates or conflicts.
+The API validates the envelope and returns HTTP 202 with a durable job receipt; row validation and CSV parsing run in Celery. JSON batches remain limited to 10,000 rows and CSV uploads to 2 MB by default. Configure the byte limit with `INGESTION_MAX_UPLOAD_BYTES`. Repeating the same key and content returns the original job without creating rows; changing content while reusing the key returns HTTP 409. Use a new key to intentionally submit a new batch, where repeated source identifiers are classified as duplicates or conflicts.
 
 ## Try deterministic reconciliation
 
@@ -68,12 +69,16 @@ $request = @{
     input_cutoff_at = '2026-10-14T12:00:00Z'
     match_window_hours = 72
 } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/reconciliation/runs -Headers $headers -ContentType 'application/json' -Body $request
+$headers['Idempotency-Key'] = 'local-reconciliation-example-001'
+$job = Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/v1/reconciliation/runs -Headers $headers -ContentType 'application/json' -Body $request
+Invoke-RestMethod -Method Get -Uri "http://localhost:8000/api/v1/jobs/$($job.job_id)" -Headers $headers
 ```
 
-The scenario returns one exact, partial, missing, duplicate-candidate, and unexplained result.
-Repeating the request returns the same run. Auditors may read the stored run but receive HTTP 403
-when creating one. See the [reconciliation v1 contract](../api/RECONCILIATION_V1.md).
+The queued scenario produces one exact, partial, missing, duplicate-candidate, and unexplained result.
+Repeating the same key and request returns the same job. Auditors may read reconciliation jobs and
+stored runs but receive HTTP 403 when creating or cancelling one. See the
+[reconciliation v1 contract](../api/RECONCILIATION_V1.md) and
+[background-processing contract](../architecture/BACKGROUND_PROCESSING.md).
 
 ## Use the analyst dashboard
 
@@ -125,6 +130,21 @@ Start a native worker from `backend/`:
 ```powershell
 ./.venv/Scripts/celery.exe -A ledgerguard.worker.celery_app worker --loglevel=INFO
 ```
+
+Inspect the Compose worker and run the opt-in PostgreSQL/Redis/Celery integration checks:
+
+```powershell
+docker compose exec worker celery -A ledgerguard.worker.celery_app inspect ping --timeout 10
+docker run --rm --network ledgerguard_default `
+  -e LEDGERGUARD_RUN_INTEGRATION=1 `
+  -e DATABASE_URL=postgresql+psycopg://ledgerguard:ledgerguard-local-only@postgres:5432/ledgerguard `
+  -e REDIS_URL=redis://redis:6379/0 `
+  -e CELERY_BROKER_URL=redis://redis:6379/0 `
+  -v "${PWD}/backend:/app" -w /app ledgerguard-api `
+  pytest -q -p no:cacheprovider tests/test_background_integration.py
+```
+
+Use `.env` values instead of the displayed local-only placeholders when you customise Compose.
 
 ## Migration and seed commands
 

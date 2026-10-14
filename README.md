@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 8 is complete: the authenticated analyst dashboard presents decimal-safe reconciliation metrics, prioritised discrepancies, batch quality, and complete stored evidence. Administrators and analysts can start a run; auditors receive the same evidence through an explicitly read-only interface and every API permission remains independently enforced.
+Day 9 is complete: transaction ingestion and reconciliation now run through durable Celery jobs. The API returns job receipts immediately, PostgreSQL records progress and terminal evidence, Redis carries delivery only, and bounded retries, timeouts, cancellation, duplicate delivery, and role boundaries are verified. The analyst dashboard shows background progress without weakening the API permission boundary.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -78,7 +78,7 @@ See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migra
 
 After signing in as the synthetic analyst, submit either published fixture under `sample-data/` to the matching `/api/v1/ingestion/transactions/json` or `/api/v1/ingestion/transactions/csv` endpoint. The [version 1 ingestion contract](docs/api/TRANSACTION_INGESTION_V1.md) documents exact fields, outcomes, and stable rejection codes.
 
-Run `docker compose exec api ledgerguard-seed-reconciliation` to add the isolated synthetic Day 7 scenario, then create a run through `POST /api/v1/reconciliation/runs`. The [version 1 reconciliation contract](docs/api/RECONCILIATION_V1.md) documents eligibility, matching, evidence, replay, and permissions.
+Run `docker compose exec api ledgerguard-seed-reconciliation` to add the isolated synthetic Day 7 scenario, then queue a run through `POST /api/v1/reconciliation/runs` with an `Idempotency-Key`. Poll the returned `/api/v1/jobs/{job_id}` link until it reaches a terminal state. The [version 1 reconciliation contract](docs/api/RECONCILIATION_V1.md) documents matching and evidence; the [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md) documents delivery, retries, progress, cancellation, and permissions.
 
 After the seed and first reconciliation run, sign in through `http://localhost:5173` as the synthetic analyst to review the operational dashboard. Non-exact results are prioritised by decimal-safe unresolved exposure; search, classification, and sort controls lead to the canonical evidence panel. The synthetic auditor sees the same evidence without run controls.
 
@@ -105,6 +105,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/api/TRANSACTION_INGESTION_V1.md` — versioned JSON/CSV ingestion contract and rejection catalogue
 - `docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md` — retry, duplicate, conflict, fingerprint, and quality-summary semantics
 - `docs/api/RECONCILIATION_V1.md` — deterministic matching, evidence, replay, and permission contract
+- `docs/architecture/BACKGROUND_PROCESSING.md` — durable jobs, delivery, retries, cancellation, and worker operations
 - `docs/ui/ANALYST_DASHBOARD.md` — dashboard metrics, states, role behaviour, prioritisation, and acceptance matrix
 
 ## License and usage

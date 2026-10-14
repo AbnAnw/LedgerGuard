@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
 from ledgerguard.config import Settings, get_settings
 from ledgerguard.db import get_db
+from ledgerguard.jobs import BackgroundJobResponse, enqueue_ingestion_job
 from ledgerguard.models import (
     Account,
     AccountStatus,
@@ -638,7 +639,7 @@ def ingest_transactions(
 router = APIRouter(prefix="/api/v1/ingestion/transactions", tags=["transaction ingestion"])
 
 
-@router.post("/json", response_model=IngestionBatchResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/json", response_model=BackgroundJobResponse, status_code=status.HTTP_202_ACCEPTED)
 def ingest_json_transactions(
     request: TransactionJsonBatchRequest,
     response: Response,
@@ -647,15 +648,25 @@ def ingest_json_transactions(
     ],
     principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.INGESTION_WRITE))],
     db: Annotated[Session, Depends(get_db)],
-) -> IngestionBatchResponse:
-    metadata = IngestionBatchMetadata.model_validate(request.model_dump(exclude={"records"}))
-    result = ingest_transactions(db, metadata, request.records, principal, idempotency_key)
-    if result.idempotent_replay:
+) -> BackgroundJobResponse:
+    result, replayed = enqueue_ingestion_job(
+        db,
+        source_system=request.source_system,
+        source_account_id=request.source_account_id,
+        schema_version=request.schema_version,
+        idempotency_key=idempotency_key,
+        format_name="json",
+        records=request.records,
+        csv_content=None,
+        original_filename=None,
+        principal=principal,
+    )
+    if replayed:
         response.status_code = status.HTTP_200_OK
     return result
 
 
-@router.post("/csv", response_model=IngestionBatchResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/csv", response_model=BackgroundJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_csv_transactions(
     response: Response,
     schema_version: Annotated[Literal["1.0"], Form()],
@@ -673,20 +684,25 @@ async def ingest_csv_transactions(
     principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.INGESTION_WRITE))],
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> IngestionBatchResponse:
+) -> BackgroundJobResponse:
     content = await file.read(settings.ingestion_max_upload_bytes + 1)
     if len(content) > settings.ingestion_max_upload_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail={"code": "UPLOAD_TOO_LARGE", "message": "CSV exceeds the configured limit."},
         )
-    records = parse_csv_records(content)
-    metadata = IngestionBatchMetadata(
-        schema_version=schema_version,
+    result, replayed = enqueue_ingestion_job(
+        db,
         source_system=source_system,
         source_account_id=source_account_id,
+        schema_version=schema_version,
+        idempotency_key=idempotency_key,
+        format_name="csv",
+        records=None,
+        csv_content=content,
+        original_filename=file.filename,
+        principal=principal,
     )
-    result = ingest_transactions(db, metadata, records, principal, idempotency_key, file.filename)
-    if result.idempotent_replay:
+    if replayed:
         response.status_code = status.HTTP_200_OK
     return result

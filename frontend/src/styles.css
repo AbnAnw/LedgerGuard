@@ -233,6 +233,25 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.job-progress {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(8rem, 14rem) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: #a6b6b1;
+  font-size: 0.85rem;
+}
+
+.job-progress progress {
+  width: 100%;
+  accent-color: #60e6b5;
+}
+
+.job-progress > span {
+  margin: 0;
+}
+
 .identity-row {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 40px;
@@ -408,7 +427,7 @@ h1 {
   font-size: 0.75rem;
 }
 
-.run-controls > div {
+.run-controls > div:not(.job-progress) {
   display: flex;
   gap: 8px;
   align-items: center;

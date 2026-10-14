@@ -7,7 +7,7 @@ LedgerGuard accepts synthetic transaction batches through authenticated JSON and
 - `POST /api/v1/ingestion/transactions/json` with an `application/json` body.
 - `POST /api/v1/ingestion/transactions/csv` with multipart form fields and one UTF-8 CSV file.
 
-Both require `Authorization: Bearer <session token>` and `Idempotency-Key: <key>`. A new batch returns HTTP 201 after all evidence commits; an exact retry returns the original batch with HTTP 200 and `idempotent_replay: true`. See [idempotency and data quality](IDEMPOTENCY_AND_DATA_QUALITY.md) for the complete retry contract.
+Both require `Authorization: Bearer <session token>` and `Idempotency-Key: <key>`. A new request commits a durable job and returns HTTP 202; an exact retry returns the original job with HTTP 200 and `replayed: true`. Poll `GET /api/v1/jobs/{job_id}` for progress, failure evidence, and the terminal `ingestion_batch_id`. See [idempotency and data quality](IDEMPOTENCY_AND_DATA_QUALITY.md) and the [background-processing contract](../architecture/BACKGROUND_PROCESSING.md) for the complete retry and delivery rules.
 
 ## Batch metadata
 
@@ -40,7 +40,7 @@ Unpublished fields are rejected so schema changes remain explicit and versioned.
 
 Every syntactically readable row produces an `ingestion_records` row with its one-based row number, original payload, SHA-256 payload hash, outcome, stable reason codes, structured rejection details, and accepted transaction link when applicable. An all-valid batch is `completed`; a mixed or all-invalid batch is `completed_with_errors`.
 
-The response includes accepted, rejected, duplicate, and conflict totals; per-row outcomes; and a deterministic quality summary. Rejected, duplicate, and conflicting records do not create financial transactions.
+The completed ingestion batch persists accepted, rejected, duplicate, and conflict totals; per-row outcomes; and a deterministic quality summary. The terminal job links to that batch. Rejected, duplicate, and conflicting records do not create financial transactions.
 
 | Rejection code | Meaning |
 | --- | --- |
@@ -62,6 +62,6 @@ Batch-level errors include `ACCOUNT_NOT_FOUND`, `IDEMPOTENCY_KEY_REUSED`, `INVAL
 
 ## Scope boundary
 
-Day 6 requires client idempotency keys and classifies duplicate/conflicting source identifiers before a financial fact is written. Background parsing begins on Day 9.
+Day 6 requires client idempotency keys and classifies duplicate/conflicting source identifiers before a financial fact is written. Day 9 runs CSV parsing and row processing in Celery while retaining the same schema and financial invariants.
 
 Synthetic examples are under [`sample-data/`](../../sample-data/README.md).

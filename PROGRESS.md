@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 8 — Analyst dashboard: Complete**
+**Day 9 — Background processing: Complete**
 
 ## Completed days
 
@@ -14,10 +14,11 @@
 - **Day 6 (2026-10-13):** Added required client idempotency keys, canonical batch and row payload fingerprints, exact-retry replay, changed-payload conflict handling, normalized source-record duplicate/conflict classification, account-level concurrency serialization, deterministic batch-quality summaries, and reinforcing PostgreSQL checks.
 - **Day 7 (2026-10-14):** Added deterministic transaction-to-settlement reconciliation with exact, partial, missing, duplicate-candidate, and unexplained classifications; stored canonical evidence and reason codes; replay-safe runs; role-protected create/read APIs; an isolated synthetic demonstration scenario; and exact-arithmetic database constraints.
 - **Day 8 (2026-10-14):** Added an authenticated operational dashboard with decimal-safe reconciliation metrics, account-scoped batch quality, deterministic discrepancy prioritisation, filtering, evidence details, role-aware run controls, and explicit loading, empty, validation, forbidden, and recoverable-error states.
+- **Day 9 (2026-10-15):** Moved JSON/CSV ingestion and reconciliation into durable Celery jobs; added PostgreSQL-backed progress, bounded retries and timeouts, safe failure evidence, cooperative cancellation, duplicate-delivery guards, job permissions and analyst progress controls; verified PostgreSQL, Redis, worker health, and a 10,000-row synthetic batch.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform and loads mounted source explicitly for reliable local iteration. SQLAlchemy implements the domain model; five Alembic revisions provide the 20-table initial schema, revocable authentication sessions, structured ingestion evidence, quality-total and reconciliation-arithmetic checks, database uniqueness, and an append-only audit trigger. FastAPI is the authorization boundary, while the interface mirrors role access without persisting bearer tokens in browser storage. The synchronous ingestion module accepts JSON or CSV through one schema-versioned, retry-safe validation path. The synchronous reconciliation module selects an immutable UTC-cutoff input set, partitions candidate relationships deterministically, and persists versioned evidence. A read-only dashboard projection joins the newest effective reconciliation snapshot to its account batches and calculates metrics with Python `Decimal`; React preserves money strings and uses scaled `BigInt` only for ordering. Celery execution remains scheduled for Day 9. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; six Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion and reconciliation evidence, durable background jobs, reinforcing constraints, and an append-only audit trigger. FastAPI validates request envelopes, authorizes callers, commits idempotent jobs, and returns HTTP 202; Redis transports job identifiers while PostgreSQL owns status, progress, attempts, cancellation, safe failure evidence, payload lifecycle, and result links. Celery parses CSV, validates rows, and executes reconciliation with late acknowledgement, worker-loss rejection, bounded retry/backoff, configured time limits, and prefetch one. Existing financial uniqueness and replay constraints remain final duplicate-delivery guards. The dashboard polls durable job status and preserves decimal strings, using scaled `BigInt` only for ordering. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -57,6 +58,10 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Select the dashboard snapshot by greatest effective UTC input cutoff, then creation time and UUID, so a later-created historical run cannot hide newer operational evidence.
 - Calculate dashboard money and percentages with Python `Decimal`; keep money as strings in JSON and React, using scaled `BigInt` comparison instead of JavaScript `number` arithmetic.
 - Prioritise non-exact outcomes before exact matches, then order by greatest unresolved exposure with classification and UUID tie-breakers. Auditors share the evidence view but never receive run controls.
+- Commit the durable job row before publishing its UUID as the Celery task ID; an exact queued retry republishes safely when broker delivery was unavailable.
+- Keep PostgreSQL as the authoritative job state and Redis as a delivery/result transport. Clear queued payloads at terminal state while retaining domain evidence and result links.
+- Acknowledge tasks late, reject on worker loss, prefetch one, retry only transient SQLAlchemy failures with bounded backoff, and turn validation or product failures into stable sanitized terminal evidence.
+- Guarantee cancellation while queued and use cooperative checkpoints while running so no worker is killed during a database commit. Auditors may read reconciliation jobs but never submit or cancel them.
 
 ## Commands required to run the system
 
@@ -81,6 +86,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-06.ps1
 ./scripts/validate-day-07.ps1
 ./scripts/validate-day-08.ps1
+./scripts/validate-day-09.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -96,6 +102,22 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 Open `http://localhost:5173` after seeding and running reconciliation. The analyst account receives the operational dashboard and run controls; the auditor account receives the same evidence in read-only mode.
 
 ## Test and coverage results
+
+- Day 9 backend formatting and linting: Ruff reported 31 files formatted and no findings; strict mypy reported no issues in 13 source files.
+- Day 9 focused jobs, worker, ingestion, and reconciliation suite: 57 passed in 2.52 seconds; one upstream Starlette/AnyIO deprecation warning remains.
+- Day 9 complete backend suite: 95 passed and 3 opt-in integration tests skipped in 5.15 seconds. Measured statement coverage was 80% overall (1,718 statements, 337 missed); configuration measured 98%, ingestion 97%, reconciliation 77%, jobs 54%, and worker 64%.
+- Day 9 frontend checks: ESLint and TypeScript checking passed; 13 tests passed across three Vitest files in 33.12 seconds; the production build transformed 18 modules and produced a 162.96 kB JavaScript bundle (51.97 kB gzip); the locked dependency audit found 0 vulnerabilities.
+- Day 9 PostgreSQL/Redis/Celery integration suite: 3 passed in 5.87 seconds against the live Compose network; Alembic reported `20261014_0006 (head)` and the worker returned `pong`.
+- Complete Alembic offline render: passed; 595 SQL lines rendered all six revisions through `20261014_0006`. Docker Compose configuration validation also passed.
+- Live asynchronous reconciliation: submission returned HTTP 202 and completed successfully in one attempt; an exact retry returned HTTP 200 with the same job, changed content under the same key returned HTTP 409, and duplicate Celery delivery retained one run and attempt count `1`. A simulated worker loss after durable claim resumed from `running` after restart, succeeded with a result, and retained logical attempt count `1`.
+- Live job permissions and cancellation: auditor reconciliation-job read returned HTTP 200 and cancellation returned HTTP 403; a queued analyst job cancelled with HTTP 202, remained cancelled after worker restart, made zero attempts, and created no result.
+- Live failure evidence: a queued request for a missing synthetic account reached `failed` in one attempt with sanitized `JOB_INPUT_REJECTED` evidence and a terminal timestamp.
+- Live 10,000-row ingestion: a 1,890,108-byte synthetic JSON request returned HTTP 202 in 2,250 ms while initially queued; the worker completed in one attempt after 6,734 ms of polling, persisting 10,000 accepted transactions and 10,000 evidence rows with no rejections, duplicates, or conflicts. These are local development measurements, not production performance claims.
+- Live platform check: PostgreSQL, Redis, API, and worker reported healthy; API readiness and the frontend returned HTTP 200.
+- Day 1–9 structural validators: passed.
+- Final Markdown local-link validation: passed; 23 Markdown files checked with no broken local links.
+- Final secret-pattern review: passed; 106 tracked or unignored paths checked with no private-key, AWS access-key, GitHub token, OpenAI-style API-key, or Google API-key patterns.
+- Final Git whitespace/error check: passed with no findings.
 
 - Day 8 backend formatting: passed after Ruff formatted the new dashboard regression assertion; 27 source, test, and migration files are formatted.
 - Day 8 backend linting: passed with no Ruff findings.
@@ -213,23 +235,24 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 - Retention periods are unratified design assumptions pending Day 16; the production queue choice remains a Day 19 decision.
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
 - The pinned Starlette test client emits one upstream AnyIO deprecation warning. It does not fail the test suite.
-- Day 5 parsing is synchronous and capped at 10,000 records and 2 MB by default; background parsing, progress, retries, and large-batch behaviour are scheduled for Day 9.
-- Day 7 reconciliation is synchronous; queue progress, retries, cancellation, and large-run behaviour remain Day 9 scope.
+- Running-job cancellation is cooperative at defined safe checkpoints; work already inside an atomic financial commit is allowed to finish rather than being terminated mid-transaction.
+- The current local Redis/Celery topology is suitable for development. The managed production queue and recovery runbook remain a Day 19 deployment decision.
+- The JSON ingestion envelope accepts at most 10,000 records and CSV uploads remain capped at 2 MB by default. Day 17 will publish controlled throughput and resilience measurements rather than extrapolating from the Day 9 local smoke measurement.
 - The isolated Day 7 settlement facts are loaded by a production-blocked synthetic seeder. A public settlement-ingestion contract is not yet implemented and must exist before production deployment.
 - The browser-inspection helper could not start because its local kernel-assets path was unavailable. UI behaviour was still exercised through 12 browser-component tests and live role/API checks, but no manual rendered screenshot was captured in this session.
 - A commit cannot embed its own final Git hash without changing that hash. This file therefore identifies the latest completed daily commit as `HEAD`; the exact short hash is reported after commit and can always be resolved with `git rev-parse --short HEAD`.
 
 ## Blockers
 
-None for Day 8. The unavailable browser-inspection helper did not block automated interface or live API validation.
+None for Day 9. The unavailable browser-inspection helper remains a limitation for manual screenshots, but automated component, API, worker, PostgreSQL, and Redis verification completed.
 
 ## Notion synchronization
 
-Day 8 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
+Day 9 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
 
 ## Next day's objective
 
-Day 9 will move ingestion and reconciliation execution into retry-safe Celery jobs with progress, failure reasons, practical cancellation, worker health, and PostgreSQL/Redis integration tests.
+Day 10 will implement deterministic, configurable fraud rules for velocity, unusual amount, repeated failures, duplicate instruments, and suspicious timing, retaining rule version, inputs, score, evidence, and output for each alert.
 
 ## Latest commit hash
 

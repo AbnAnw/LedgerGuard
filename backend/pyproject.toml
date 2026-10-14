@@ -40,6 +40,9 @@ packages = ["src/ledgerguard"]
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers -ra"
 testpaths = ["tests"]
+markers = [
+  "integration: requires the Docker Compose PostgreSQL, Redis, and Celery services",
+]
 
 [tool.ruff]
 target-version = "py312"

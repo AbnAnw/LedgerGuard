@@ -22,11 +22,14 @@ from ledgerguard.ingestion import (
     ingest_transactions,
     parse_csv_records,
 )
+from ledgerguard.jobs import BackgroundJobResponse
 from ledgerguard.main import app
 from ledgerguard.models import (
     Account,
     AccountStatus,
     AccountType,
+    BackgroundJobKind,
+    BackgroundJobStatus,
     FinancialTransaction,
     IngestionBatch,
     IngestionBatchStatus,
@@ -76,6 +79,29 @@ def make_principal(role: str = "operations_analyst") -> AuthPrincipal:
         email=f"{role}@ledgerguard.invalid",
         display_name=f"Synthetic {role}",
         roles=(role,),
+    )
+
+
+def queued_job(*, replayed: bool = False) -> BackgroundJobResponse:
+    return BackgroundJobResponse(
+        job_id=uuid4(),
+        kind=BackgroundJobKind.TRANSACTION_INGESTION,
+        status=BackgroundJobStatus.QUEUED,
+        replayed=replayed,
+        progress_current=0,
+        progress_total=2,
+        progress_percent=0,
+        attempt_count=0,
+        max_attempts=3,
+        status_message="Queued for worker delivery.",
+        failure_code=None,
+        failure_detail=None,
+        cancellation_requested=False,
+        ingestion_batch_id=None,
+        reconciliation_run_id=None,
+        created_at=datetime.now(UTC),
+        started_at=None,
+        finished_at=None,
     )
 
 
@@ -440,10 +466,15 @@ def test_csv_parser_rejects_bad_encoding_and_missing_columns() -> None:
     assert "occurred_at" in columns_error.value.detail["fields"]
 
 
-def test_json_endpoint_returns_deterministic_record_results(client: TestClient) -> None:
-    db = make_db(make_account())
+def test_json_endpoint_queues_records_without_inline_processing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = object()
     app.dependency_overrides[get_current_principal] = lambda: make_principal()
     app.dependency_overrides[get_db] = lambda: db
+    enqueue = MagicMock(return_value=(queued_job(), False))
+    monkeypatch.setattr("ledgerguard.ingestion.enqueue_ingestion_job", enqueue)
+    records = [valid_record(), {**valid_record("TXN-BAD"), "amount": 12.5}]
 
     response = client.post(
         "/api/v1/ingestion/transactions/json",
@@ -452,75 +483,40 @@ def test_json_endpoint_returns_deterministic_record_results(client: TestClient) 
             "schema_version": "1.0",
             "source_system": "synthetic-demo",
             "source_account_id": "DEMO-ACCOUNT-001",
-            "records": [valid_record(), {**valid_record("TXN-BAD"), "amount": 12.5}],
+            "records": records,
         },
     )
 
-    assert response.status_code == 201, response.text
-    payload = response.json()
-    assert payload["accepted_count"] == 1
-    assert payload["rejected_count"] == 1
-    assert payload["duplicate_count"] == 0
-    assert payload["conflict_count"] == 0
-    assert payload["idempotent_replay"] is False
-    assert payload["quality_summary"]["acceptance_rate_percent"] == "50.00"
-    assert payload["records"][1]["reason_codes"] == ["INVALID_AMOUNT"]
+    assert response.status_code == 202, response.text
+    assert response.json()["status"] == "queued"
+    assert response.json()["replayed"] is False
+    assert enqueue.call_args.kwargs["records"] == records
 
 
-def test_exact_endpoint_retry_returns_http_200_and_original_batch(client: TestClient) -> None:
-    account = make_account()
-    raw_records = [valid_record("TXN-ENDPOINT-RETRY")]
-    metadata = IngestionBatchMetadata(
-        schema_version="1.0",
-        source_system="synthetic-demo",
-        source_account_id="DEMO-ACCOUNT-001",
-    )
-    batch = IngestionBatch(
-        id=uuid4(),
-        record_kind=IngestionRecordKind.TRANSACTION,
-        source_system=metadata.source_system,
-        schema_version=metadata.schema_version,
-        idempotency_key="endpoint-retry-key",
-        payload_sha256=canonical_sha256(
-            {"metadata": metadata.model_dump(), "records": raw_records}
-        ),
-        status=IngestionBatchStatus.COMPLETED,
-        source_count=1,
-        accepted_count=1,
-        rejected_count=0,
-        duplicate_count=0,
-        conflict_count=0,
-        requested_by_user_id=uuid4(),
-        correlation_id=uuid4(),
-        version=1,
-    )
-    evidence = IngestionRecord(
-        id=uuid4(),
-        batch_id=batch.id,
-        row_number=1,
-        source_record_id="TXN-ENDPOINT-RETRY",
-        payload=raw_records[0],
-        payload_sha256=canonical_sha256(raw_records[0]),
-        outcome=IngestionRecordOutcome.ACCEPTED,
-        reason_codes=[],
-        rejection_details=[],
-        transaction_id=uuid4(),
-        processed_at=datetime.now(UTC),
-    )
+def test_exact_endpoint_retry_returns_http_200_and_original_job(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job = queued_job(replayed=True)
     app.dependency_overrides[get_current_principal] = lambda: make_principal()
-    app.dependency_overrides[get_db] = lambda: make_db(
-        account, existing_batch=batch, scalar_rows=[evidence]
+    app.dependency_overrides[get_db] = lambda: object()
+    monkeypatch.setattr(
+        "ledgerguard.ingestion.enqueue_ingestion_job", lambda *args, **kwargs: (job, True)
     )
 
     response = client.post(
         "/api/v1/ingestion/transactions/json",
         headers={"Idempotency-Key": "endpoint-retry-key"},
-        json={**metadata.model_dump(), "records": raw_records},
+        json={
+            "schema_version": "1.0",
+            "source_system": "synthetic-demo",
+            "source_account_id": "DEMO-ACCOUNT-001",
+            "records": [valid_record("TXN-ENDPOINT-RETRY")],
+        },
     )
 
     assert response.status_code == 200
-    assert response.json()["batch_id"] == str(batch.id)
-    assert response.json()["idempotent_replay"] is True
+    assert response.json()["job_id"] == str(job.job_id)
+    assert response.json()["replayed"] is True
 
 
 def test_ingestion_endpoint_requires_valid_idempotency_key(client: TestClient) -> None:
@@ -544,10 +540,14 @@ def test_ingestion_endpoint_requires_valid_idempotency_key(client: TestClient) -
     assert malformed.status_code == 422
 
 
-def test_csv_endpoint_uses_same_validation_pipeline(client: TestClient) -> None:
-    db = make_db(make_account())
+def test_csv_endpoint_queues_raw_content_for_worker_parsing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = object()
     app.dependency_overrides[get_current_principal] = lambda: make_principal()
     app.dependency_overrides[get_db] = lambda: db
+    enqueue = MagicMock(return_value=(queued_job(), False))
+    monkeypatch.setattr("ledgerguard.ingestion.enqueue_ingestion_job", enqueue)
     csv_content = (
         "source_record_id,source_reference,amount,currency,direction,status,occurred_at,"
         "instrument_fingerprint\n"
@@ -565,9 +565,9 @@ def test_csv_endpoint_uses_same_validation_pipeline(client: TestClient) -> None:
         files={"file": ("synthetic.csv", csv_content, "text/csv")},
     )
 
-    assert response.status_code == 201, response.text
-    assert response.json()["accepted_count"] == 1
-    assert response.json()["status"] == "completed"
+    assert response.status_code == 202, response.text
+    assert response.json()["status"] == "queued"
+    assert enqueue.call_args.kwargs["csv_content"] == csv_content.encode()
 
 
 def test_auditor_cannot_ingest_transactions(client: TestClient) -> None:
