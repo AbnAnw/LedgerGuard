@@ -27,7 +27,32 @@ def test_postgresql_has_durable_background_job_schema() -> None:
         revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
     assert table_name == "background_jobs"
-    assert revision == "20261016_0007"
+    assert revision == "20261016_0008"
+
+
+def test_postgresql_has_case_workflow_invariants() -> None:
+    with engine.connect() as connection:
+        constraints = set(
+            connection.scalars(
+                text(
+                    "SELECT conname FROM pg_constraint WHERE conname IN "
+                    "('ck_cases_title_length', 'ck_cases_description_length', "
+                    "'ck_cases_resolution_required', 'ck_cases_resolution_summary_length', "
+                    "'ck_case_comments_body_length', 'ck_case_status_history_changed', "
+                    "'ck_case_status_history_reason_length')"
+                )
+            )
+        )
+
+    assert constraints == {
+        "ck_cases_title_length",
+        "ck_cases_description_length",
+        "ck_cases_resolution_required",
+        "ck_cases_resolution_summary_length",
+        "ck_case_comments_body_length",
+        "ck_case_status_history_changed",
+        "ck_case_status_history_reason_length",
+    }
 
 
 def test_postgresql_has_fraud_rule_and_evidence_invariants() -> None:

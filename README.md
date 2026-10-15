@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 10 is complete: five deterministic fraud-rule families evaluate stored transactions, versioned configuration is immutable after activation, and every alert preserves its evaluated inputs, matched facts, threshold, reason, severity, score, rule version, correlation ID, and canonical evidence hash. Exact replay returns the same alerts without duplicates. Analysts and administrators may evaluate; auditors have an evidence-only interface; only administrators may version rules.
+Day 11 is complete: analysts can create cases from unclaimed alerts, assign ownership, append investigation notes, link evidence, and move cases through guarded review, escalation, resolution, and reopening transitions. Optimistic versions reject stale writes, status history retains actor/reason/correlation evidence, and auditors receive a read-only investigation workspace.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -82,6 +82,8 @@ Run `docker compose exec api ledgerguard-seed-reconciliation` to add the isolate
 
 Run `docker compose exec api ledgerguard-seed-fraud` to add the isolated Day 10 rules and positive/negative transaction scenarios. Use the Fraud alerts workspace or `POST /api/v1/fraud/evaluations`; an exact repeat is idempotent. The [fraud-rule engine contract](docs/architecture/FRAUD_RULE_ENGINE.md) defines parameters, deterministic context, scores, evidence, edge cases, and access boundaries.
 
+After fraud evaluation, use the Cases workspace to create a case from an unclaimed synthetic alert. Analysts can filter by owner, status, priority, rule, and age; assign the case to themselves; add investigation notes; and apply only the next valid lifecycle actions. The [case-management contract](docs/architecture/CASE_MANAGEMENT.md) defines concurrency, transitions, resolution effects, and role boundaries.
+
 After the seed and first reconciliation run, sign in through `http://localhost:5173` as the synthetic analyst to review the operational dashboard. Non-exact results are prioritised by decimal-safe unresolved exposure; search, classification, and sort controls lead to the canonical evidence panel. The synthetic auditor sees the same evidence without run controls.
 
 ## Engineering principles
@@ -108,6 +110,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md` — retry, duplicate, conflict, fingerprint, and quality-summary semantics
 - `docs/api/RECONCILIATION_V1.md` — deterministic matching, evidence, replay, and permission contract
 - `docs/architecture/BACKGROUND_PROCESSING.md` — durable jobs, delivery, retries, cancellation, and worker operations
+- `docs/architecture/CASE_MANAGEMENT.md` — investigation aggregate, lifecycle, concurrency, queue, and permission contract
 - `docs/ui/ANALYST_DASHBOARD.md` — dashboard metrics, states, role behaviour, prioritisation, and acceptance matrix
 
 ## License and usage

@@ -805,11 +805,21 @@ class InvestigationCase(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base)
     __tablename__ = "cases"
     __table_args__ = (
         sa.CheckConstraint("version > 0", name="ck_cases_version_positive"),
+        sa.CheckConstraint("length(btrim(title)) BETWEEN 1 AND 200", name="ck_cases_title_length"),
         sa.CheckConstraint(
-            "(status <> 'resolved') OR "
-            "(resolution_code IS NOT NULL AND resolution_summary IS NOT NULL "
-            "AND resolved_at IS NOT NULL)",
+            "description IS NULL OR length(description) <= 4000",
+            name="ck_cases_description_length",
+        ),
+        sa.CheckConstraint(
+            "(status = 'resolved' AND resolution_code IS NOT NULL "
+            "AND resolution_summary IS NOT NULL AND resolved_at IS NOT NULL) OR "
+            "(status <> 'resolved' AND resolution_code IS NULL "
+            "AND resolution_summary IS NULL AND resolved_at IS NULL)",
             name="ck_cases_resolution_required",
+        ),
+        sa.CheckConstraint(
+            "resolution_summary IS NULL OR length(btrim(resolution_summary)) BETWEEN 1 AND 4000",
+            name="ck_cases_resolution_summary_length",
         ),
         sa.Index("ix_cases_queue", "status", "priority", "updated_at"),
         sa.Index("ix_cases_owner_queue", "owner_user_id", "status", "updated_at"),
@@ -843,7 +853,10 @@ class InvestigationCase(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base)
 
 class CaseAlert(Base):
     __tablename__ = "case_alerts"
-    __table_args__ = (sa.Index("ix_case_alerts_alert", "alert_id"),)
+    __table_args__ = (
+        sa.Index("ix_case_alerts_alert", "alert_id"),
+        sa.Index("ix_case_alerts_case_linked", "case_id", "linked_at"),
+    )
 
     case_id: Mapped[UUID] = mapped_column(
         sa.ForeignKey("cases.id", ondelete="RESTRICT"), primary_key=True
@@ -861,7 +874,12 @@ class CaseAlert(Base):
 
 class CaseComment(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "case_comments"
-    __table_args__ = (sa.Index("ix_case_comments_timeline", "case_id", "created_at", "id"),)
+    __table_args__ = (
+        sa.CheckConstraint(
+            "length(btrim(body)) BETWEEN 1 AND 4000", name="ck_case_comments_body_length"
+        ),
+        sa.Index("ix_case_comments_timeline", "case_id", "created_at", "id"),
+    )
 
     case_id: Mapped[UUID] = mapped_column(
         sa.ForeignKey("cases.id", ondelete="RESTRICT"), nullable=False
@@ -875,6 +893,14 @@ class CaseComment(UuidPrimaryKeyMixin, TimestampMixin, Base):
 class CaseStatusHistory(UuidPrimaryKeyMixin, Base):
     __tablename__ = "case_status_history"
     __table_args__ = (
+        sa.CheckConstraint(
+            "from_status IS NULL OR from_status <> to_status",
+            name="ck_case_status_history_changed",
+        ),
+        sa.CheckConstraint(
+            "reason IS NOT NULL AND length(btrim(reason)) BETWEEN 1 AND 2000",
+            name="ck_case_status_history_reason_length",
+        ),
         sa.Index("ix_case_status_history_timeline", "case_id", "changed_at", "id", unique=True),
     )
 
@@ -887,7 +913,7 @@ class CaseStatusHistory(UuidPrimaryKeyMixin, Base):
     to_status: Mapped[CaseStatus] = mapped_column(
         enum_column(CaseStatus, "case_history_to_status"), nullable=False
     )
-    reason: Mapped[str | None] = mapped_column(sa.Text)
+    reason: Mapped[str] = mapped_column(sa.Text, nullable=False)
     changed_by_user_id: Mapped[UUID] = mapped_column(
         sa.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )

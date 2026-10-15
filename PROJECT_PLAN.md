@@ -22,7 +22,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 8 | Analyst dashboard | **Complete** |
 | Day 9 | Background processing | **Complete** |
 | Day 10 | Fraud rule engine | **Complete** |
-| Day 11 | Case-management workflow | **Not started** |
+| Day 11 | Case-management workflow | **Complete** |
 | Day 12 | Audit logging | **Not started** |
 | Day 13 | Reporting and export | **Not started** |
 | Day 14 | Comprehensive automated testing | **Not started** |
@@ -149,7 +149,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 11 — Case-management workflow
 
-**Status: Not started**
+**Status: Complete**
 
 - Allow analysts to assign, comment on, escalate, resolve, and reopen cases.
 - Record case status history, linked alerts, ownership, and optimistic concurrency evidence.

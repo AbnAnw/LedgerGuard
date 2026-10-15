@@ -339,3 +339,175 @@ export async function runFraudEvaluation(token: string): Promise<FraudEvaluation
   }
   return (await response.json()) as FraudEvaluation;
 }
+
+export type CaseStatus = "open" | "in_review" | "escalated" | "resolved" | "reopened";
+export type CasePriority = "low" | "medium" | "high" | "critical";
+
+export interface CaseSummary {
+  id: string;
+  case_number: number;
+  title: string;
+  status: CaseStatus;
+  priority: CasePriority;
+  owner_user_id: string | null;
+  owner_display_name: string | null;
+  alert_count: number;
+  created_at: string;
+  updated_at: string;
+  version: number;
+}
+
+export interface InvestigationCase extends CaseSummary {
+  description: string | null;
+  resolution_code: string | null;
+  resolution_summary: string | null;
+  resolved_at: string | null;
+  alerts: Array<{
+    id: string;
+    rule_code: string;
+    rule_version_number: number;
+    source_record_id: string;
+    severity: string;
+    score: string | null;
+    status: FraudAlert["status"];
+    reason_code: string;
+    created_at: string;
+  }>;
+  comments: Array<{
+    id: string;
+    author_user_id: string;
+    author_display_name: string;
+    body: string;
+    created_at: string;
+  }>;
+  history: Array<{
+    id: string;
+    from_status: CaseStatus | null;
+    to_status: CaseStatus;
+    reason: string;
+    changed_by_user_id: string;
+    changed_by_display_name: string;
+    correlation_id: string;
+    changed_at: string;
+  }>;
+}
+
+export interface CaseFilters {
+  status?: CaseStatus;
+  priority?: CasePriority;
+  owner_user_id?: string;
+  unassigned?: boolean;
+  rule_code?: string;
+  min_age_hours?: number;
+}
+
+function caseHeaders(token: string) {
+  return {
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+async function caseResponse(response: Response, message: string): Promise<InvestigationCase> {
+  if (!response.ok) throw new ApiError(message, response.status);
+  return (await response.json()) as InvestigationCase;
+}
+
+export async function fetchCases(
+  token: string,
+  filters: CaseFilters = {},
+  signal?: AbortSignal,
+): Promise<CaseSummary[]> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.priority) params.set("priority", filters.priority);
+  if (filters.owner_user_id) params.set("owner_user_id", filters.owner_user_id);
+  if (filters.unassigned) params.set("unassigned", "true");
+  if (filters.rule_code) params.set("rule_code", filters.rule_code);
+  if (filters.min_age_hours !== undefined) params.set("min_age_hours", String(filters.min_age_hours));
+  const response = await fetch(`${apiBaseUrl}/api/v1/cases?${params}`, {
+    headers: caseHeaders(token),
+    signal,
+  });
+  if (!response.ok) throw new ApiError("Case queue could not be loaded.", response.status);
+  return (await response.json()) as CaseSummary[];
+}
+
+export async function fetchCase(token: string, caseId: string): Promise<InvestigationCase> {
+  return caseResponse(
+    await fetch(`${apiBaseUrl}/api/v1/cases/${caseId}`, { headers: caseHeaders(token) }),
+    "Case evidence could not be loaded.",
+  );
+}
+
+export async function createCase(
+  token: string,
+  alertId: string,
+  title: string,
+  priority: CasePriority,
+): Promise<InvestigationCase> {
+  return caseResponse(
+    await fetch(`${apiBaseUrl}/api/v1/cases`, {
+      method: "POST",
+      headers: caseHeaders(token),
+      body: JSON.stringify({ title, priority, alert_ids: [alertId] }),
+    }),
+    "Case could not be created.",
+  );
+}
+
+export async function assignCase(
+  token: string,
+  caseId: string,
+  expectedVersion: number,
+  ownerUserId: string | null,
+): Promise<InvestigationCase> {
+  return caseResponse(
+    await fetch(`${apiBaseUrl}/api/v1/cases/${caseId}/assignment`, {
+      method: "PATCH",
+      headers: caseHeaders(token),
+      body: JSON.stringify({ expected_version: expectedVersion, owner_user_id: ownerUserId }),
+    }),
+    "Case assignment could not be saved. Refresh and retry.",
+  );
+}
+
+export async function commentOnCase(
+  token: string,
+  caseId: string,
+  expectedVersion: number,
+  body: string,
+): Promise<InvestigationCase> {
+  return caseResponse(
+    await fetch(`${apiBaseUrl}/api/v1/cases/${caseId}/comments`, {
+      method: "POST",
+      headers: caseHeaders(token),
+      body: JSON.stringify({ expected_version: expectedVersion, body }),
+    }),
+    "Comment could not be saved. Refresh and retry.",
+  );
+}
+
+export async function transitionCase(
+  token: string,
+  investigation: InvestigationCase,
+  target: CaseStatus,
+  reason: string,
+  resolution?: { code: string; summary: string },
+): Promise<InvestigationCase> {
+  return caseResponse(
+    await fetch(`${apiBaseUrl}/api/v1/cases/${investigation.id}/transitions`, {
+      method: "POST",
+      headers: caseHeaders(token),
+      body: JSON.stringify({
+        expected_version: investigation.version,
+        to_status: target,
+        reason,
+        resolution_code: resolution?.code,
+        resolution_summary: resolution?.summary,
+      }),
+    }),
+    "Case transition was rejected. Refresh and verify the lifecycle.",
+  );
+}

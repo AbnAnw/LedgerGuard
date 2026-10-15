@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 10 — Fraud rule engine: Complete**
+**Day 11 — Case-management workflow: Complete**
 
 ## Completed days
 
@@ -16,10 +16,11 @@
 - **Day 8 (2026-10-14):** Added an authenticated operational dashboard with decimal-safe reconciliation metrics, account-scoped batch quality, deterministic discrepancy prioritisation, filtering, evidence details, role-aware run controls, and explicit loading, empty, validation, forbidden, and recoverable-error states.
 - **Day 9 (2026-10-15):** Moved JSON/CSV ingestion and reconciliation into durable Celery jobs; added PostgreSQL-backed progress, bounded retries and timeouts, safe failure evidence, cooperative cancellation, duplicate-delivery guards, job permissions and analyst progress controls; verified PostgreSQL, Redis, worker health, and a 10,000-row synthetic batch.
 - **Day 10 (2026-10-16):** Added five configurable deterministic fraud-rule families, immutable activated versions, canonical alert evidence and replay deduplication, positive/negative synthetic scenarios, administrator/analyst/auditor permissions, and a role-aware fraud-monitoring interface.
+- **Day 11 (2026-10-16):** Added version-protected investigation cases with alert claiming, valid assignment, append-only comments and status history, controlled review/escalation/resolution/reopening, linked-alert status effects, queue filters, role enforcement, database invariants, and an analyst/auditor case workspace.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; seven Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The deterministic fraud module evaluates stored facts using Decimal-safe versioned parameters, stores canonical evidence and SHA-256 digests, and uses database uniqueness to make exact replay idempotent. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, and alert state. The interface preserves money as strings, labels UTC, and hides evaluation or management actions when permissions are absent. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; eight Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The case module owns guarded lifecycle transitions, alert claims, append-only comments/history, optimistic version checks, and queue filters; PostgreSQL reinforces text, version, resolution, and history invariants. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, and case state. The interface preserves money as strings, labels UTC, and removes case mutation controls for auditors. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -68,6 +69,9 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Store rule/version identity, subject and matched facts, parameters, metric, threshold, reason, severity, deterministic score, cutoff, and output in canonical alert evidence. Treat the score as a triage signal, never a probability.
 - Permit only administrators to create or version rules; administrators and analysts may evaluate; all three supported roles may read rules and alerts; auditors receive no mutation controls.
 - Retire the prior active version atomically when a new version activates. PostgreSQL lifecycle checks and a trigger prevent configuration changes after activation while allowing the active-to-retired lifecycle transition.
+- Require an expected case version on every mutation and return `CASE_VERSION_CONFLICT` for stale work; increment the aggregate once per successful assignment, comment, alert link, or transition.
+- Permit an alert to enter only one case through the normal workflow. Resolve linked alerts as closed for confirmed issues and dismissed otherwise; reopening restores them to in-review and clears closure metadata.
+- Restrict case ownership to active administrators or operations analysts. Auditors retain complete case evidence reads but receive no mutation endpoint or interface controls.
 
 ## Commands required to run the system
 
@@ -94,6 +98,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-08.ps1
 ./scripts/validate-day-09.ps1
 ./scripts/validate-day-10.ps1
+./scripts/validate-day-11.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -110,6 +115,13 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 Open `http://localhost:5173` after seeding and running reconciliation. The analyst account receives the operational dashboard and run controls; the auditor account receives the same evidence in read-only mode.
 
 ## Test and coverage results
+
+- Day 11 backend quality checks: Ruff found no lint or formatting issues across 28 source/test files; strict mypy found no issues in 15 source files.
+- Day 11 backend suite: 131 passed and 5 opt-in integration tests skipped in 2.94 seconds; one upstream Starlette/AnyIO deprecation warning remains. No coverage measurement was run or claimed for Day 11.
+- Day 11 live integration suite: 5 passed in 6.07 seconds against PostgreSQL revision `20261016_0008`, Redis, and the Celery worker; all five Compose services were running and the API, database, Redis, and worker were healthy.
+- Day 11 frontend checks: ESLint and TypeScript checking passed; 17 tests passed across five Vitest files; the production build transformed 20 modules and produced a 177.88 kB JavaScript bundle (54.96 kB gzip).
+- Live case lifecycle: one synthetic alert produced a case that was assigned, commented, moved through in-review and escalation, resolved, and reopened. The result retained 5 status-history entries, closed the alert on confirmed resolution, returned it to in-review on reopen, and matched the combined owner/priority/status/rule/age filter.
+- Live conflict and permission checks: a stale comment returned HTTP 409 and an auditor comment returned HTTP 403. The final reopened case was at version 7 with one append-only comment.
 
 - Day 10 backend formatting and linting: Ruff reported 34 files formatted and no findings; strict mypy reported no issues in 14 source files.
 - Day 10 complete backend suite: 110 passed and 4 opt-in integration tests skipped; measured statement coverage was 77% overall (2,089 statements, 472 missed), with the new fraud module at 69% and all SQLAlchemy model declarations exercised.
@@ -256,20 +268,20 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 - The current local Redis/Celery topology is suitable for development. The managed production queue and recovery runbook remain a Day 19 deployment decision.
 - The JSON ingestion envelope accepts at most 10,000 records and CSV uploads remain capped at 2 MB by default. Day 17 will publish controlled throughput and resilience measurements rather than extrapolating from the Day 9 local smoke measurement.
 - The isolated Day 7 settlement facts are loaded by a production-blocked synthetic seeder. A public settlement-ingestion contract is not yet implemented and must exist before production deployment.
-- The browser-inspection helper could not start because its local kernel-assets path was unavailable. UI behaviour was still exercised through 12 browser-component tests and live role/API checks, but no manual rendered screenshot was captured in this session.
+- No manual rendered screenshot was captured for Day 11; interface behaviour was exercised through 17 component tests, a production build, and live API/role checks.
 - A commit cannot embed its own final Git hash without changing that hash. This file therefore identifies the latest completed daily commit as `HEAD`; the exact short hash is reported after commit and can always be resolved with `git rev-parse --short HEAD`.
 
 ## Blockers
 
-None for Day 10. Automated component, API, PostgreSQL, Redis, worker, and production-build verification completed; no fraud-detection accuracy claim is made from the synthetic scenarios.
+None for Day 11. Automated component, API, PostgreSQL, Redis, worker, lifecycle, permission, and production-build verification completed using synthetic data.
 
 ## Notion synchronization
 
-Day 10 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
+Day 11 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
 
 ## Next day's objective
 
-Day 11 will implement the case-management lifecycle: assign, comment, escalate, resolve, reopen, link alerts, preserve status history, enforce valid transitions and permissions, and filter the investigation queue.
+Day 12 will add append-only audit logging for authentication, security-sensitive reads, and writes affecting transactions, rules, reconciliation, alerts, and cases, including actor, result, target, correlation, and decision evidence for auditor reconstruction.
 
 ## Latest commit hash
 

@@ -705,6 +705,116 @@ tbody tr:last-child td {
   font-size: 0.76rem;
 }
 
+.case-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.case-filters label,
+.comment-form {
+  display: grid;
+  gap: 6px;
+  color: #91a39d;
+  font-size: 0.78rem;
+}
+
+.case-filters input,
+.case-filters select,
+.comment-form textarea {
+  min-width: 0;
+  padding: 10px;
+  color: #e9f7f2;
+  background: #09120f;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 7px;
+}
+
+.case-alert-tray,
+.case-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.case-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.8fr) minmax(0, 2fr);
+  gap: 18px;
+}
+
+.case-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.case-card {
+  display: grid;
+  gap: 8px;
+  padding: 15px;
+  color: #e9f7f2;
+  text-align: left;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.case-card--active {
+  border-color: #60e6b5;
+}
+
+.case-card span,
+.case-card small,
+.case-history small {
+  color: #82958e;
+  font-size: 0.72rem;
+}
+
+.case-detail {
+  padding: 22px;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+}
+
+.case-detail-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.case-detail h3 {
+  margin: 6px 0 12px;
+}
+
+.case-detail h4 {
+  margin: 24px 0 10px;
+}
+
+.case-detail li {
+  margin-bottom: 8px;
+}
+
+.case-history small {
+  display: block;
+  margin-top: 3px;
+}
+
+.comment-form textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.comment-form .primary-button {
+  justify-self: start;
+}
+
 .raw-evidence summary {
   cursor: pointer;
 }
@@ -928,7 +1038,9 @@ h2 {
   .metric-grid,
   .filter-bar,
   .results-layout,
-  .fact-list {
+  .fact-list,
+  .case-filters,
+  .case-layout {
     grid-template-columns: 1fr;
   }
 
