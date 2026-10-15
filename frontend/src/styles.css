@@ -569,6 +569,26 @@ tbody tr:last-child td {
   border-color: rgb(255 127 112 / 30%);
 }
 
+.severity-badge--low,
+.severity-badge--medium {
+  color: #ffd181;
+  border-color: rgb(255 180 68 / 30%);
+}
+
+.severity-badge--high,
+.severity-badge--critical {
+  color: #ff9c91;
+  border-color: rgb(255 127 112 / 30%);
+}
+
+.empty-state {
+  padding: 28px;
+  color: #91a39d;
+  background: rgb(1 8 6 / 42%);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 12px;
+}
+
 .filter-bar {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(150px, 220px));

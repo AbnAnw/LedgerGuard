@@ -1,5 +1,7 @@
 # Synthetic sample data
 
+`fraud-rules-v1.json` identifies the isolated Day 10 account, cutoff, and five expected deterministic rule families. Seed the actual rule versions and six synthetic facts with `ledgerguard-seed-fraud`; the fixture intentionally contains both triggered and non-triggered cases.
+
 All files in this directory are invented for LedgerGuard demonstrations and tests. They contain no real customer, payment, account, or instrument information.
 
 ## Transaction ingestion v1.0
@@ -13,3 +15,4 @@ All files in this directory are invented for LedgerGuard demonstrations and test
 
 The authoritative field contract is [Transaction Ingestion Schema v1.0](../docs/api/TRANSACTION_INGESTION_V1.md).
 The reconciliation contract is [Reconciliation API and Algorithm v1](../docs/api/RECONCILIATION_V1.md).
+The fraud fixture contract is [Fraud Rule Engine](../docs/architecture/FRAUD_RULE_ENGINE.md).

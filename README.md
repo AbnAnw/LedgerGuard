@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 9 is complete: transaction ingestion and reconciliation now run through durable Celery jobs. The API returns job receipts immediately, PostgreSQL records progress and terminal evidence, Redis carries delivery only, and bounded retries, timeouts, cancellation, duplicate delivery, and role boundaries are verified. The analyst dashboard shows background progress without weakening the API permission boundary.
+Day 10 is complete: five deterministic fraud-rule families evaluate stored transactions, versioned configuration is immutable after activation, and every alert preserves its evaluated inputs, matched facts, threshold, reason, severity, score, rule version, correlation ID, and canonical evidence hash. Exact replay returns the same alerts without duplicates. Analysts and administrators may evaluate; auditors have an evidence-only interface; only administrators may version rules.
 
 ## Users and least privilege
 
@@ -79,6 +79,8 @@ See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migra
 After signing in as the synthetic analyst, submit either published fixture under `sample-data/` to the matching `/api/v1/ingestion/transactions/json` or `/api/v1/ingestion/transactions/csv` endpoint. The [version 1 ingestion contract](docs/api/TRANSACTION_INGESTION_V1.md) documents exact fields, outcomes, and stable rejection codes.
 
 Run `docker compose exec api ledgerguard-seed-reconciliation` to add the isolated synthetic Day 7 scenario, then queue a run through `POST /api/v1/reconciliation/runs` with an `Idempotency-Key`. Poll the returned `/api/v1/jobs/{job_id}` link until it reaches a terminal state. The [version 1 reconciliation contract](docs/api/RECONCILIATION_V1.md) documents matching and evidence; the [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md) documents delivery, retries, progress, cancellation, and permissions.
+
+Run `docker compose exec api ledgerguard-seed-fraud` to add the isolated Day 10 rules and positive/negative transaction scenarios. Use the Fraud alerts workspace or `POST /api/v1/fraud/evaluations`; an exact repeat is idempotent. The [fraud-rule engine contract](docs/architecture/FRAUD_RULE_ENGINE.md) defines parameters, deterministic context, scores, evidence, edge cases, and access boundaries.
 
 After the seed and first reconciliation run, sign in through `http://localhost:5173` as the synthetic analyst to review the operational dashboard. Non-exact results are prioritised by decimal-safe unresolved exposure; search, classification, and sort controls lead to the canonical evidence panel. The synthetic auditor sees the same evidence without run controls.
 

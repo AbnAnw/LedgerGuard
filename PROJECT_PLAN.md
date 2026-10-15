@@ -21,7 +21,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 7 | Reconciliation engine version 1 | **Complete** |
 | Day 8 | Analyst dashboard | **Complete** |
 | Day 9 | Background processing | **Complete** |
-| Day 10 | Fraud rule engine | **Not started** |
+| Day 10 | Fraud rule engine | **Complete** |
 | Day 11 | Case-management workflow | **Not started** |
 | Day 12 | Audit logging | **Not started** |
 | Day 13 | Reporting and export | **Not started** |
@@ -138,7 +138,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 10 — Fraud rule engine
 
-**Status: Not started**
+**Status: Complete**
 
 - Create configurable rules for transaction velocity, unusual amount, repeated failures, duplicate instruments, and suspicious timing.
 - Store rule version, evaluated inputs, evidence, score/severity, and output for every alert.

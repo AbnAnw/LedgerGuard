@@ -58,6 +58,7 @@ idempotent and refuses to run in production:
 
 ```powershell
 docker compose exec api ledgerguard-seed-reconciliation
+docker compose exec api ledgerguard-seed-fraud
 ```
 
 Using the analyst login and `$headers` from above, create a run:
@@ -155,6 +156,7 @@ cd backend
 ./.venv/Scripts/alembic.exe upgrade head
 ./.venv/Scripts/ledgerguard-seed.exe
 ./.venv/Scripts/ledgerguard-seed-reconciliation.exe
+./.venv/Scripts/ledgerguard-seed-fraud.exe
 ```
 
 Render the migration as PostgreSQL SQL without connecting to a database:

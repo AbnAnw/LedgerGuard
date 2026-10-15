@@ -17,3 +17,10 @@ Generate SQL without connecting to PostgreSQL:
 ```powershell
 ./.venv/Scripts/alembic.exe upgrade head --sql
 ```
+
+After the base seed, load the isolated deterministic demonstrations with:
+
+```powershell
+ledgerguard-seed-reconciliation
+ledgerguard-seed-fraud
+```

@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 9 — Background processing: Complete**
+**Day 10 — Fraud rule engine: Complete**
 
 ## Completed days
 
@@ -15,10 +15,11 @@
 - **Day 7 (2026-10-14):** Added deterministic transaction-to-settlement reconciliation with exact, partial, missing, duplicate-candidate, and unexplained classifications; stored canonical evidence and reason codes; replay-safe runs; role-protected create/read APIs; an isolated synthetic demonstration scenario; and exact-arithmetic database constraints.
 - **Day 8 (2026-10-14):** Added an authenticated operational dashboard with decimal-safe reconciliation metrics, account-scoped batch quality, deterministic discrepancy prioritisation, filtering, evidence details, role-aware run controls, and explicit loading, empty, validation, forbidden, and recoverable-error states.
 - **Day 9 (2026-10-15):** Moved JSON/CSV ingestion and reconciliation into durable Celery jobs; added PostgreSQL-backed progress, bounded retries and timeouts, safe failure evidence, cooperative cancellation, duplicate-delivery guards, job permissions and analyst progress controls; verified PostgreSQL, Redis, worker health, and a 10,000-row synthetic batch.
+- **Day 10 (2026-10-16):** Added five configurable deterministic fraud-rule families, immutable activated versions, canonical alert evidence and replay deduplication, positive/negative synthetic scenarios, administrator/analyst/auditor permissions, and a role-aware fraud-monitoring interface.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; six Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion and reconciliation evidence, durable background jobs, reinforcing constraints, and an append-only audit trigger. FastAPI validates request envelopes, authorizes callers, commits idempotent jobs, and returns HTTP 202; Redis transports job identifiers while PostgreSQL owns status, progress, attempts, cancellation, safe failure evidence, payload lifecycle, and result links. Celery parses CSV, validates rows, and executes reconciliation with late acknowledgement, worker-loss rejection, bounded retry/backoff, configured time limits, and prefetch one. Existing financial uniqueness and replay constraints remain final duplicate-delivery guards. The dashboard polls durable job status and preserves decimal strings, using scaled `BigInt` only for ordering. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; seven Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The deterministic fraud module evaluates stored facts using Decimal-safe versioned parameters, stores canonical evidence and SHA-256 digests, and uses database uniqueness to make exact replay idempotent. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, and alert state. The interface preserves money as strings, labels UTC, and hides evaluation or management actions when permissions are absent. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -62,6 +63,11 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Keep PostgreSQL as the authoritative job state and Redis as a delivery/result transport. Clear queued payloads at terminal state while retaining domain evidence and result links.
 - Acknowledge tasks late, reject on worker loss, prefetch one, retry only transient SQLAlchemy failures with bounded backoff, and turn validation or product failures into stable sanitized terminal evidence.
 - Guarantee cancellation while queued and use cooperative checkpoints while running so no worker is killed during a database commit. Auditors may read reconciliation jobs but never submit or cancel them.
+- Evaluate only posted transaction subjects and use same-account historical context at or before each subject, with UUID tie-breaking for equal timestamps and no future-data leakage.
+- Implement velocity, unusual amount, repeated failure, duplicate instrument, and suspicious UTC timing as strict versioned parameter contracts. Reject binary floating-point money thresholds and unknown configuration keys.
+- Store rule/version identity, subject and matched facts, parameters, metric, threshold, reason, severity, deterministic score, cutoff, and output in canonical alert evidence. Treat the score as a triage signal, never a probability.
+- Permit only administrators to create or version rules; administrators and analysts may evaluate; all three supported roles may read rules and alerts; auditors receive no mutation controls.
+- Retire the prior active version atomically when a new version activates. PostgreSQL lifecycle checks and a trigger prevent configuration changes after activation while allowing the active-to-retired lifecycle transition.
 
 ## Commands required to run the system
 
@@ -87,6 +93,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-07.ps1
 ./scripts/validate-day-08.ps1
 ./scripts/validate-day-09.ps1
+./scripts/validate-day-10.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -95,6 +102,7 @@ Seed the isolated deterministic reconciliation scenario after the normal develop
 
 ```powershell
 docker compose exec api ledgerguard-seed-reconciliation
+docker compose exec api ledgerguard-seed-fraud
 ```
 
 The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerguard.invalid`, and `auditor@ledgerguard.invalid` with the local-only password `DemoOnly!ChangeMe123456`. Override `DEMO_USER_PASSWORD` in `.env` before sharing the environment.
@@ -102,6 +110,15 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 Open `http://localhost:5173` after seeding and running reconciliation. The analyst account receives the operational dashboard and run controls; the auditor account receives the same evidence in read-only mode.
 
 ## Test and coverage results
+
+- Day 10 backend formatting and linting: Ruff reported 34 files formatted and no findings; strict mypy reported no issues in 14 source files.
+- Day 10 complete backend suite: 110 passed and 4 opt-in integration tests skipped; measured statement coverage was 77% overall (2,089 statements, 472 missed), with the new fraud module at 69% and all SQLAlchemy model declarations exercised.
+- Day 10 focused fraud suite: 15 passed, covering all five trigger families, negative cases, wrapped UTC windows, invalid configuration, determinism, and API permission denials.
+- Day 10 frontend checks: ESLint and TypeScript checking passed; 15 tests passed across four Vitest files; the production build transformed 19 modules and produced a 167.78 kB JavaScript bundle (52.81 kB gzip); the locked dependency audit found 0 vulnerabilities.
+- Complete Alembic offline render: passed through `20261016_0007`; the live database reported that revision at head. The new checks enforce rule lifecycle and JSON evidence shape, and PostgreSQL rejected an attempted active-rule severity change through the immutability trigger.
+- Live fraud scenario: the idempotent seeder retained five active rule families and six synthetic facts after two runs. Initial evaluation produced nine explainable alerts; exact replay created zero and returned the same nine alert IDs, all with valid 64-character evidence hashes.
+- Live role and version boundaries: analyst rule creation and auditor evaluation each returned HTTP 403; an administrator activated velocity rule version 2, leaving exactly one active and one retired version.
+- Live platform check: PostgreSQL, Redis, API, and worker reported healthy; the worker returned `pong`, the frontend returned HTTP 200, and the Day 10 database integration checks passed.
 
 - Day 9 backend formatting and linting: Ruff reported 31 files formatted and no findings; strict mypy reported no issues in 13 source files.
 - Day 9 focused jobs, worker, ingestion, and reconciliation suite: 57 passed in 2.52 seconds; one upstream Starlette/AnyIO deprecation warning remains.
@@ -231,7 +248,7 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 
 - MFA, password reset, external identity-provider integration, and authentication rate limiting are not implemented; rate limiting and the wider threat review are scheduled for Day 16.
 - Authentication attempts are not yet written to append-only audit history; security-event auditing is scheduled for Day 12.
-- Fraud thresholds are demonstration values to be defined later and must not be represented as validated risk policy.
+- Fraud thresholds and scores are deterministic demonstration controls, not validated fraud policy, probability estimates, or claims of detection accuracy.
 - Retention periods are unratified design assumptions pending Day 16; the production queue choice remains a Day 19 decision.
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
 - The pinned Starlette test client emits one upstream AnyIO deprecation warning. It does not fail the test suite.
@@ -244,15 +261,15 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 
 ## Blockers
 
-None for Day 9. The unavailable browser-inspection helper remains a limitation for manual screenshots, but automated component, API, worker, PostgreSQL, and Redis verification completed.
+None for Day 10. Automated component, API, PostgreSQL, Redis, worker, and production-build verification completed; no fraud-detection accuracy claim is made from the synthetic scenarios.
 
 ## Notion synchronization
 
-Day 9 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
+Day 10 synchronization is performed after the daily commit so the concise Notion entry can include its immutable hash. If the connected workspace is unavailable, this progress record is the prepared source for later synchronization.
 
 ## Next day's objective
 
-Day 10 will implement deterministic, configurable fraud rules for velocity, unusual amount, repeated failures, duplicate instruments, and suspicious timing, retaining rule version, inputs, score, evidence, and output for each alert.
+Day 11 will implement the case-management lifecycle: assign, comment, escalate, resolve, reopen, link alerts, preserve status history, enforce valid transitions and permissions, and filter the investigation queue.
 
 ## Latest commit hash
 

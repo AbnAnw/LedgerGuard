@@ -9,6 +9,7 @@ import {
   type LivenessResponse,
 } from "./api";
 import { Dashboard } from "./Dashboard";
+import { FraudMonitor } from "./FraudMonitor";
 import "./styles.css";
 
 type ConnectionState =
@@ -118,6 +119,7 @@ export function App() {
               <div className="nav-links">
                 {auth.user.permissions.includes("reconciliation:read") ? <a href="#dashboard">Dashboard</a> : null}
                 {auth.user.permissions.includes("reconciliation:read") ? <a href="#evidence">Evidence</a> : null}
+                {auth.user.permissions.includes("alerts:read") ? <a href="#fraud-monitor">Fraud alerts</a> : null}
                 {auth.user.roles.includes("administrator") ? <a href="#access-heading">Administration</a> : null}
               </div>
               <button className="text-button" onClick={() => void handleLogout()} type="button">
@@ -199,6 +201,10 @@ export function App() {
 
       {auth.kind === "signed_in" && auth.user.permissions.includes("reconciliation:read") ? (
         <Dashboard token={auth.token} user={auth.user} />
+      ) : null}
+
+      {auth.kind === "signed_in" && auth.user.permissions.includes("alerts:read") ? (
+        <FraudMonitor token={auth.token} user={auth.user} />
       ) : null}
 
       <section aria-labelledby="foundation-heading" className="foundation">

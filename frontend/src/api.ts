@@ -251,3 +251,91 @@ export async function fetchBackgroundJob(token: string, jobId: string): Promise<
   }
   return (await response.json()) as BackgroundJob;
 }
+
+export interface FraudRuleVersion {
+  id: string;
+  rule_id: string;
+  version_number: number;
+  rule_type: "velocity" | "unusual_amount" | "repeated_failure" | "duplicate_instrument" | "suspicious_timing";
+  parameters: Record<string, unknown>;
+  severity: "low" | "medium" | "high" | "critical";
+  status: "draft" | "active" | "retired";
+  activated_at: string | null;
+}
+
+export interface FraudRule {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  versions: FraudRuleVersion[];
+}
+
+export interface FraudAlert {
+  id: string;
+  rule_code: string;
+  rule_version_id: string;
+  rule_version_number: number;
+  transaction_id: string;
+  source_record_id: string;
+  severity: "low" | "medium" | "high" | "critical";
+  score: string;
+  status: "open" | "in_review" | "closed" | "dismissed";
+  reason_code: string;
+  evidence: Record<string, unknown>;
+  evidence_sha256: string;
+  correlation_id: string;
+  created_at: string;
+}
+
+export interface FraudEvaluation {
+  account_id: string;
+  input_cutoff_at: string;
+  active_rule_count: number;
+  subject_count: number;
+  triggered_count: number;
+  created_count: number;
+  replayed_count: number;
+  alerts: FraudAlert[];
+}
+
+export async function fetchFraudMonitor(
+  token: string,
+  signal?: AbortSignal,
+): Promise<{ rules: FraudRule[]; alerts: FraudAlert[] }> {
+  const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
+  const [rulesResponse, alertsResponse] = await Promise.all([
+    fetch(`${apiBaseUrl}/api/v1/fraud/rules`, { headers, signal }),
+    fetch(`${apiBaseUrl}/api/v1/fraud/alerts?limit=100`, { headers, signal }),
+  ]);
+  if (!rulesResponse.ok || !alertsResponse.ok) {
+    throw new ApiError("Fraud-monitoring evidence could not be loaded.", Math.max(rulesResponse.status, alertsResponse.status));
+  }
+  return {
+    rules: (await rulesResponse.json()) as FraudRule[],
+    alerts: (await alertsResponse.json()) as FraudAlert[],
+  };
+}
+
+export async function runFraudEvaluation(token: string): Promise<FraudEvaluation> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/fraud/evaluations`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      source_system: "synthetic-fraud",
+      source_account_id: "DEMO-FRAUD-001",
+      input_cutoff_at: new Date().toISOString(),
+    }),
+  });
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 403 ? "Your role cannot run fraud evaluation." : "Fraud evaluation failed.",
+      response.status,
+    );
+  }
+  return (await response.json()) as FraudEvaluation;
+}

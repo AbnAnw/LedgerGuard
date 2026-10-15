@@ -704,6 +704,18 @@ class FraudRuleVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         sa.UniqueConstraint("rule_id", "version_number", name="uq_rule_versions_number"),
         sa.CheckConstraint("version_number > 0", name="ck_rule_versions_number_positive"),
+        sa.CheckConstraint(
+            "(status = 'draft' AND activated_by_user_id IS NULL AND activated_at IS NULL "
+            "AND retired_at IS NULL) OR "
+            "(status = 'active' AND activated_by_user_id IS NOT NULL "
+            "AND activated_at IS NOT NULL AND retired_at IS NULL) OR "
+            "(status = 'retired' AND activated_by_user_id IS NOT NULL "
+            "AND activated_at IS NOT NULL AND retired_at IS NOT NULL)",
+            name="ck_rule_versions_lifecycle",
+        ),
+        sa.CheckConstraint(
+            "jsonb_typeof(parameters) = 'object'", name="ck_rule_versions_parameters_object"
+        ),
         sa.Index(
             "uq_rule_versions_active",
             "rule_id",
@@ -747,12 +759,19 @@ class Alert(UuidPrimaryKeyMixin, TimestampMixin, MutableMixin, Base):
             "score IS NULL OR (score >= 0 AND score <= 100)", name="ck_alerts_score"
         ),
         sa.CheckConstraint("evidence_sha256 ~ '^[0-9a-f]{64}$'", name="ck_alerts_evidence_hash"),
+        sa.CheckConstraint("jsonb_typeof(evidence) = 'object'", name="ck_alerts_evidence_object"),
         sa.CheckConstraint(
             "(closed_at IS NULL) = (closed_by_user_id IS NULL)", name="ck_alerts_close_pair"
         ),
         sa.CheckConstraint("version > 0", name="ck_alerts_version_positive"),
         sa.Index("ix_alerts_triage", "status", "severity", "created_at"),
         sa.Index("ix_alerts_rule_created", "rule_version_id", "created_at"),
+        sa.Index(
+            "ix_alerts_transaction_created",
+            "transaction_id",
+            "created_at",
+            postgresql_where=sa.text("transaction_id IS NOT NULL"),
+        ),
     )
 
     rule_version_id: Mapped[UUID] = mapped_column(

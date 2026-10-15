@@ -1,0 +1,15 @@
+{
+  "account": {
+    "source_system": "synthetic-fraud",
+    "source_account_id": "DEMO-FRAUD-001"
+  },
+  "input_cutoff_at": "2026-01-20T12:00:00Z",
+  "expected_rule_types": [
+    "velocity",
+    "unusual_amount",
+    "repeated_failure",
+    "duplicate_instrument",
+    "suspicious_timing"
+  ],
+  "notes": "Synthetic positive and negative scenarios only. Run ledgerguard-seed-fraud before evaluation."
+}

@@ -27,7 +27,34 @@ def test_postgresql_has_durable_background_job_schema() -> None:
         revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
     assert table_name == "background_jobs"
-    assert revision == "20261014_0006"
+    assert revision == "20261016_0007"
+
+
+def test_postgresql_has_fraud_rule_and_evidence_invariants() -> None:
+    with engine.connect() as connection:
+        constraints = set(
+            connection.scalars(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conname IN ('ck_rule_versions_lifecycle', "
+                    "'ck_rule_versions_parameters_object', 'ck_alerts_evidence_object')"
+                )
+            )
+        )
+        trigger = connection.scalar(
+            text(
+                "SELECT tgname FROM pg_trigger "
+                "WHERE tgname = 'trg_fraud_rule_version_configuration_immutable' "
+                "AND NOT tgisinternal"
+            )
+        )
+
+    assert constraints == {
+        "ck_rule_versions_lifecycle",
+        "ck_rule_versions_parameters_object",
+        "ck_alerts_evidence_object",
+    }
+    assert trigger == "trg_fraud_rule_version_configuration_immutable"
 
 
 def test_redis_broker_is_reachable() -> None:

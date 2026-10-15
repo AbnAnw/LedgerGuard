@@ -11,6 +11,7 @@ from ledgerguard import __version__
 from ledgerguard.auth import access_router, auth_router
 from ledgerguard.config import get_settings
 from ledgerguard.dashboard import router as dashboard_router
+from ledgerguard.fraud import router as fraud_router
 from ledgerguard.health import ReadinessState, probe_dependencies
 from ledgerguard.ingestion import router as ingestion_router
 from ledgerguard.jobs import router as jobs_router
@@ -36,6 +37,7 @@ app.include_router(ingestion_router)
 app.include_router(reconciliation_router)
 app.include_router(dashboard_router)
 app.include_router(jobs_router)
+app.include_router(fraud_router)
 
 
 class LiveResponse(BaseModel):
