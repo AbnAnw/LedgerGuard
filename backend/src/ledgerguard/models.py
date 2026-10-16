@@ -926,10 +926,32 @@ class CaseStatusHistory(UuidPrimaryKeyMixin, Base):
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     __table_args__ = (
+        sa.CheckConstraint(
+            "(actor_type = 'user') = (actor_user_id IS NOT NULL)",
+            name="ck_audit_actor_user_pair",
+        ),
+        sa.CheckConstraint("action ~ '^[a-z][a-z0-9_.]{2,99}$'", name="ck_audit_action_format"),
+        sa.CheckConstraint(
+            "target_type ~ '^[a-z][a-z0-9_]{1,79}$'",
+            name="ck_audit_target_type_format",
+        ),
+        sa.CheckConstraint(
+            "before_state IS NULL OR jsonb_typeof(before_state) = 'object'",
+            name="ck_audit_before_state_object",
+        ),
+        sa.CheckConstraint(
+            "after_state IS NULL OR jsonb_typeof(after_state) = 'object'",
+            name="ck_audit_after_state_object",
+        ),
+        sa.CheckConstraint(
+            "jsonb_typeof(metadata) = 'object' AND metadata <> '{}'::jsonb",
+            name="ck_audit_metadata_object",
+        ),
         sa.Index("ix_audit_target", "target_type", "target_id", "sequence_number"),
         sa.Index("ix_audit_actor", "actor_user_id", "sequence_number"),
         sa.Index("ix_audit_correlation", "correlation_id", "sequence_number"),
         sa.Index("ix_audit_occurred", "occurred_at"),
+        sa.Index("ix_audit_result_occurred", "result", "occurred_at"),
     )
 
     sequence_number: Mapped[int] = mapped_column(sa.BigInteger, sa.Identity(), primary_key=True)
@@ -952,6 +974,10 @@ class AuditEvent(Base):
     correlation_id: Mapped[UUID] = mapped_column(sa.Uuid, nullable=False)
     request_id: Mapped[UUID | None] = mapped_column(sa.Uuid)
     job_id: Mapped[UUID | None] = mapped_column(sa.Uuid)
-    before_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    after_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    before_state: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)  # type: ignore[no-untyped-call]
+    )
+    after_state: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)  # type: ignore[no-untyped-call]
+    )
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)

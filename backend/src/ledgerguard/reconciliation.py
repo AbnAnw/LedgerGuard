@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ledgerguard.audit_service import append_audit_event
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
 from ledgerguard.db import get_db
 from ledgerguard.jobs import BackgroundJobResponse, enqueue_reconciliation_job
@@ -569,6 +570,8 @@ def execute_reconciliation(
     db: Session,
     request: ReconciliationRunRequest,
     principal: AuthPrincipal,
+    audit_correlation_id: UUID | None = None,
+    audit_job_id: UUID | None = None,
 ) -> ReconciliationRunResponse:
     """Select eligible facts and atomically persist a reproducible run."""
 
@@ -628,7 +631,7 @@ def execute_reconciliation(
         replay_key=replay_key,
         status=ReconciliationRunStatus.RUNNING,
         requested_by_user_id=principal.user_id,
-        correlation_id=uuid4(),
+        correlation_id=audit_correlation_id or uuid4(),
         started_at=now,
     )
 
@@ -683,6 +686,26 @@ def execute_reconciliation(
                 )
         run.status = ReconciliationRunStatus.COMPLETED
         run.finished_at = datetime.now(UTC)
+        append_audit_event(
+            db,
+            action="reconciliation.run.completed",
+            target_type="reconciliation_run",
+            target_id=run.id,
+            actor_user_id=principal.user_id,
+            correlation_id=run.correlation_id,
+            job_id=audit_job_id,
+            after_state={
+                "status": run.status.value,
+                "result_count": len(decisions),
+                "algorithm_version": run.algorithm_version,
+            },
+            metadata={
+                "schema_version": "audit-v1",
+                "transaction_ids": [str(item.id) for item in transaction_models],
+                "settlement_ids": [str(item.id) for item in settlement_models],
+                "input_cutoff_at": request.input_cutoff_at.isoformat(),
+            },
+        )
         db.commit()
     except IntegrityError:
         db.rollback()

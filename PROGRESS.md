@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 11 — Case-management workflow: Complete**
+**Day 12 — Audit logging: Complete**
 
 ## Completed days
 
@@ -17,10 +17,11 @@
 - **Day 9 (2026-10-15):** Moved JSON/CSV ingestion and reconciliation into durable Celery jobs; added PostgreSQL-backed progress, bounded retries and timeouts, safe failure evidence, cooperative cancellation, duplicate-delivery guards, job permissions and analyst progress controls; verified PostgreSQL, Redis, worker health, and a 10,000-row synthetic batch.
 - **Day 10 (2026-10-16):** Added five configurable deterministic fraud-rule families, immutable activated versions, canonical alert evidence and replay deduplication, positive/negative synthetic scenarios, administrator/analyst/auditor permissions, and a role-aware fraud-monitoring interface.
 - **Day 11 (2026-10-16):** Added version-protected investigation cases with alert claiming, valid assignment, append-only comments and status history, controlled review/escalation/resolution/reopening, linked-alert status effects, queue filters, role enforcement, database invariants, and an analyst/auditor case workspace.
+- **Day 12 (2026-10-16):** Added structured audit evidence for authentication, authorization denials, sensitive reads, durable jobs, ingestion, reconciliation, rule versions, alerts, and cases; enforced validated/redacted event payloads and append-only PostgreSQL history; and added auditor-only filtering and transaction-to-case reconstruction in the API and interface.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; eight Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The case module owns guarded lifecycle transitions, alert claims, append-only comments/history, optimistic version checks, and queue filters; PostgreSQL reinforces text, version, resolution, and history invariants. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, and case state. The interface preserves money as strings, labels UTC, and removes case mutation controls for auditors. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The audit module owns a validated event vocabulary, bounded before/after evidence, redacted metadata, auditor-only queries, and transaction-to-case reconstruction; PostgreSQL reinforces actor pairing, action/target formats, JSON object shape, ordering indexes, and immutable rows. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, case, and audit state. The interface preserves money as strings, labels UTC, removes mutation controls for auditors, and hides audit history from non-auditors. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -72,6 +73,8 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Require an expected case version on every mutation and return `CASE_VERSION_CONFLICT` for stale work; increment the aggregate once per successful assignment, comment, alert link, or transition.
 - Permit an alert to enter only one case through the normal workflow. Resolve linked alerts as closed for confirmed issues and dismissed otherwise; reopening restores them to in-review and clears closure metadata.
 - Restrict case ownership to active administrators or operations analysts. Auditors retain complete case evidence reads but receive no mutation endpoint or interface controls.
+- Route security and domain events through one audit writer that validates action and target names, rejects secret-like keys and oversized evidence, stores only structured JSON objects, and participates in the same database transaction as the affected write.
+- Treat audit reads as security-sensitive events themselves. Only auditors and administrators may query history; case reconstruction follows explicit case-alert-transaction links and never relies on free-text matching.
 
 ## Commands required to run the system
 
@@ -99,6 +102,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-09.ps1
 ./scripts/validate-day-10.ps1
 ./scripts/validate-day-11.ps1
+./scripts/validate-day-12.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -115,6 +119,13 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 Open `http://localhost:5173` after seeding and running reconciliation. The analyst account receives the operational dashboard and run controls; the auditor account receives the same evidence in read-only mode.
 
 ## Test and coverage results
+
+- Day 12 backend quality checks: Ruff formatting and linting passed across 31 source/test/migration files; strict mypy found no issues in 17 source files.
+- Day 12 backend suite: 139 passed and 6 opt-in integration tests skipped in 7.78 seconds; one upstream Starlette/AnyIO deprecation warning remains. Measured statement coverage was 74% overall (2,596 statements, 669 missed), 70% for the audit API, and 95% for the shared audit writer.
+- Day 12 live integration suite: 6 passed in 5.94 seconds against PostgreSQL revision `20261016_0009`, including the audit constraints, append-only trigger, Redis connection, and worker checks.
+- Day 12 frontend checks: ESLint and TypeScript checking passed; 18 tests passed across six Vitest files; the production build transformed 21 modules and produced a 182.53 kB JavaScript bundle (55.72 kB gzip) and 14.40 kB CSS bundle (3.84 kB gzip).
+- Live audit reconstruction: a denied login returned HTTP 401, an ingestion job succeeded, a fresh synthetic transaction generated alert evidence, and its case reached resolved. Analyst audit access returned HTTP 403; the auditor timeline returned 6 events spanning `transaction.ingestion.completed`, `fraud.alert.created`, `case.created`, `case.transitioned`, and the sensitive timeline read.
+- Live append-only safeguard: PostgreSQL rejected a controlled update of an audit event with `audit_events are append-only`; no audit row was changed.
 
 - Day 11 backend quality checks: Ruff found no lint or formatting issues across 28 source/test files; strict mypy found no issues in 15 source files.
 - Day 11 backend suite: 131 passed and 5 opt-in integration tests skipped in 2.94 seconds; one upstream Starlette/AnyIO deprecation warning remains. No coverage measurement was run or claimed for Day 11.
@@ -259,7 +270,7 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 ## Known issues
 
 - MFA, password reset, external identity-provider integration, and authentication rate limiting are not implemented; rate limiting and the wider threat review are scheduled for Day 16.
-- Authentication attempts are not yet written to append-only audit history; security-event auditing is scheduled for Day 12.
+- Reports and exports are not yet implemented; scoped daily reconciliation, unresolved-case reporting, independent total verification, and CSV injection defence are scheduled for Day 13.
 - Fraud thresholds and scores are deterministic demonstration controls, not validated fraud policy, probability estimates, or claims of detection accuracy.
 - Retention periods are unratified design assumptions pending Day 16; the production queue choice remains a Day 19 decision.
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
@@ -273,15 +284,15 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 
 ## Blockers
 
-None for Day 11. Automated component, API, PostgreSQL, Redis, worker, lifecycle, permission, and production-build verification completed using synthetic data.
+None for Day 12. Automated component, API, PostgreSQL, Redis, worker, migration, append-only, permission, evidence-chain, and production-build verification completed using synthetic data.
 
 ## Notion synchronization
 
-Day 11 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
+Day 12 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
 
 ## Next day's objective
 
-Day 12 will add append-only audit logging for authentication, security-sensitive reads, and writes affecting transactions, rules, reconciliation, alerts, and cases, including actor, result, target, correlation, and decision evidence for auditor reconstruction.
+Day 13 will add scoped daily reconciliation and unresolved-case reports, independently verified decimal totals, allowlisted CSV exports with spreadsheet-formula neutralisation, and audit evidence for report views and exports.
 
 ## Latest commit hash
 

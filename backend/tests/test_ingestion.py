@@ -408,7 +408,8 @@ def test_mixed_batch_persists_accepted_and_rejected_evidence() -> None:
     ]
     assert all(detail.message for detail in result.records[1].rejection_details)
 
-    batch = db.add.call_args.args[0]
+    added = [call.args[0] for call in db.add.call_args_list]
+    batch = next(item for item in added if isinstance(item, IngestionBatch))
     persisted = [item for call in db.add_all.call_args_list for item in call.args[0]]
     transactions = [item for item in persisted if isinstance(item, FinancialTransaction)]
     records = [item for item in persisted if isinstance(item, IngestionRecord)]

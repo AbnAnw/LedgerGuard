@@ -22,7 +22,7 @@ from ledgerguard.auth import (
 from ledgerguard.config import Settings, get_settings
 from ledgerguard.db import get_db
 from ledgerguard.main import app
-from ledgerguard.models import AuthSession, User, UserStatus
+from ledgerguard.models import AuditEvent, AuthSession, User, UserStatus
 
 
 @pytest.fixture
@@ -88,7 +88,11 @@ def test_disabled_user_cannot_authenticate() -> None:
 
     assert error.value.status_code == 401
     assert error.value.detail == "Invalid email or password"
-    db.add.assert_not_called()
+    event = db.add.call_args.args[0]
+    assert isinstance(event, AuditEvent)
+    assert event.action == "auth.login"
+    assert event.result.value == "denied"
+    db.commit.assert_called_once()
 
 
 def test_failed_password_is_generic_and_counts_toward_lockout() -> None:

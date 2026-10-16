@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ledgerguard.audit_service import append_audit_event
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
 from ledgerguard.db import get_db
 from ledgerguard.models import (
@@ -532,6 +533,19 @@ def create_rule(
         db.add(version)
         if request.activate:
             _activate_version(db, version, principal.user_id, datetime.now(UTC))
+        append_audit_event(
+            db,
+            action="fraud.rule.created",
+            target_type="fraud_rule",
+            target_id=rule.id,
+            actor_user_id=principal.user_id,
+            after_state={
+                "code": rule.code,
+                "version_number": version.version_number,
+                "version_status": version.status.value,
+            },
+            metadata={"schema_version": "audit-v1", "rule_type": version.rule_type.value},
+        )
         db.commit()
         db.refresh(rule)
         db.refresh(version)
@@ -592,6 +606,18 @@ def create_rule_version(
     db.add(version)
     if request.activate:
         _activate_version(db, version, principal.user_id, datetime.now(UTC))
+    append_audit_event(
+        db,
+        action="fraud.rule.version_created",
+        target_type="fraud_rule",
+        target_id=rule.id,
+        actor_user_id=principal.user_id,
+        after_state={
+            "version_number": version.version_number,
+            "version_status": version.status.value,
+        },
+        metadata={"schema_version": "audit-v1", "rule_type": version.rule_type.value},
+    )
     try:
         db.commit()
         db.refresh(version)
@@ -674,6 +700,7 @@ def run_evaluation(
     transaction_by_id = {item.id: item for item in transactions}
     alerts: list[AlertResponse] = []
     created_count = 0
+    evaluation_correlation_id = uuid4()
     for decision in decisions:
         existing = db.scalar(
             select(Alert).where(Alert.deduplication_key == decision.deduplication_key)
@@ -689,16 +716,54 @@ def run_evaluation(
                 reason_code=decision.reason_code,
                 evidence=decision.evidence,
                 evidence_sha256=decision.evidence_sha256,
-                correlation_id=uuid4(),
+                correlation_id=evaluation_correlation_id,
             )
             db.add(existing)
             db.flush()
+            append_audit_event(
+                db,
+                action="fraud.alert.created",
+                target_type="alert",
+                target_id=existing.id,
+                actor_user_id=principal.user_id,
+                correlation_id=evaluation_correlation_id,
+                after_state={
+                    "status": existing.status.value,
+                    "severity": existing.severity.value,
+                    "rule_version_id": str(existing.rule_version_id),
+                },
+                metadata={
+                    "schema_version": "audit-v1",
+                    "transaction_id": str(decision.subject.id),
+                    "evidence_sha256": existing.evidence_sha256,
+                    "reason_code": existing.reason_code,
+                },
+            )
             created_count += 1
         rule, version = rule_by_version[existing.rule_version_id]
         if existing.transaction_id is None:
             raise RuntimeError("fraud alert unexpectedly lacks a transaction")
         transaction = transaction_by_id[existing.transaction_id]
         alerts.append(_alert_response(existing, rule, version, transaction))
+    append_audit_event(
+        db,
+        action="fraud.evaluation.completed",
+        target_type="account",
+        target_id=account.id,
+        actor_user_id=principal.user_id,
+        correlation_id=evaluation_correlation_id,
+        after_state={
+            "triggered_count": len(decisions),
+            "created_count": created_count,
+            "replayed_count": len(decisions) - created_count,
+        },
+        metadata={
+            "schema_version": "audit-v1",
+            "alert_ids": [str(item.id) for item in alerts],
+            "transaction_ids": [str(item.transaction_id) for item in alerts],
+            "input_cutoff_at": request.input_cutoff_at.isoformat(),
+        },
+    )
     try:
         db.commit()
     except IntegrityError as error:
@@ -727,7 +792,7 @@ def run_evaluation(
 
 @router.get("/alerts", response_model=list[AlertResponse])
 def list_alerts(
-    _: Annotated[AuthPrincipal, Depends(require_permissions(Permission.ALERTS_READ))],
+    principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.ALERTS_READ))],
     db: Annotated[Session, Depends(get_db)],
     response: Response,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
@@ -741,7 +806,16 @@ def list_alerts(
         .limit(limit)
     ).all()
     response.headers["X-Result-Limit"] = str(limit)
-    return [
+    result = [
         _alert_response(alert, rule, version, transaction)
         for alert, rule, version, transaction in rows
     ]
+    append_audit_event(
+        db,
+        action="fraud.alerts.read",
+        target_type="alert_collection",
+        actor_user_id=principal.user_id,
+        metadata={"schema_version": "audit-v1", "result_count": len(result), "limit": limit},
+    )
+    db.commit()
+    return result

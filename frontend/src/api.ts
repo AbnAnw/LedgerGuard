@@ -511,3 +511,57 @@ export async function transitionCase(
     "Case transition was rejected. Refresh and verify the lifecycle.",
   );
 }
+
+export interface AuditEvent {
+  sequence_number: number;
+  id: string;
+  occurred_at: string;
+  actor_user_id: string | null;
+  actor_display_name: string | null;
+  actor_type: "user" | "system" | "anonymous";
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  result: "success" | "denied" | "failure";
+  correlation_id: string;
+  request_id: string | null;
+  job_id: string | null;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface CaseAuditTrail {
+  case_id: string;
+  alert_ids: string[];
+  transaction_ids: string[];
+  events: AuditEvent[];
+}
+
+export async function fetchAuditEvents(
+  token: string,
+  filters: { action?: string; target_type?: string; correlation_id?: string } = {},
+  signal?: AbortSignal,
+): Promise<AuditEvent[]> {
+  const params = new URLSearchParams({ limit: "100" });
+  if (filters.action) params.set("action", filters.action);
+  if (filters.target_type) params.set("target_type", filters.target_type);
+  if (filters.correlation_id) params.set("correlation_id", filters.correlation_id);
+  const response = await fetch(`${apiBaseUrl}/api/v1/audit/events?${params}`, {
+    headers: caseHeaders(token),
+    signal,
+  });
+  if (!response.ok) throw new ApiError("Audit history could not be loaded.", response.status);
+  return (await response.json()) as AuditEvent[];
+}
+
+export async function fetchCaseAuditTrail(
+  token: string,
+  caseId: string,
+): Promise<CaseAuditTrail> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/audit/cases/${caseId}/timeline`, {
+    headers: caseHeaders(token),
+  });
+  if (!response.ok) throw new ApiError("Case audit trail could not be loaded.", response.status);
+  return (await response.json()) as CaseAuditTrail;
+}

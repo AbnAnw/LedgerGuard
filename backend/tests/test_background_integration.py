@@ -27,7 +27,7 @@ def test_postgresql_has_durable_background_job_schema() -> None:
         revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
     assert table_name == "background_jobs"
-    assert revision == "20261016_0008"
+    assert revision == "20261016_0009"
 
 
 def test_postgresql_has_case_workflow_invariants() -> None:
@@ -53,6 +53,36 @@ def test_postgresql_has_case_workflow_invariants() -> None:
         "ck_case_status_history_changed",
         "ck_case_status_history_reason_length",
     }
+
+
+def test_postgresql_has_structured_append_only_audit_invariants() -> None:
+    with engine.connect() as connection:
+        constraints = set(
+            connection.scalars(
+                text(
+                    "SELECT conname FROM pg_constraint WHERE conname IN "
+                    "('ck_audit_actor_user_pair', 'ck_audit_action_format', "
+                    "'ck_audit_target_type_format', 'ck_audit_before_state_object', "
+                    "'ck_audit_after_state_object', 'ck_audit_metadata_object')"
+                )
+            )
+        )
+        trigger = connection.scalar(
+            text(
+                "SELECT tgname FROM pg_trigger WHERE tgname = 'audit_events_append_only' "
+                "AND NOT tgisinternal"
+            )
+        )
+
+    assert constraints == {
+        "ck_audit_actor_user_pair",
+        "ck_audit_action_format",
+        "ck_audit_target_type_format",
+        "ck_audit_before_state_object",
+        "ck_audit_after_state_object",
+        "ck_audit_metadata_object",
+    }
+    assert trigger == "audit_events_append_only"
 
 
 def test_postgresql_has_fraud_rule_and_evidence_invariants() -> None:

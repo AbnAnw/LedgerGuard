@@ -14,11 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ledgerguard.audit_service import append_audit_event
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
 from ledgerguard.db import get_db
 from ledgerguard.models import (
     Alert,
     AlertStatus,
+    AuditResult,
     CaseAlert,
     CaseComment,
     CasePriority,
@@ -486,6 +488,29 @@ def create_case(
         )
         alert.status = AlertStatus.IN_REVIEW
         alert.version += 1
+    append_audit_event(
+        db,
+        action="case.created",
+        target_type="case",
+        target_id=investigation.id,
+        actor_user_id=principal.user_id,
+        correlation_id=request_id,
+        after_state={
+            "status": investigation.status.value,
+            "priority": investigation.priority.value,
+            "owner_user_id": str(investigation.owner_user_id)
+            if investigation.owner_user_id
+            else None,
+            "version": investigation.version,
+        },
+        metadata={
+            "schema_version": "audit-v1",
+            "alert_ids": [str(alert.id) for alert in alerts],
+            "transaction_ids": [
+                str(alert.transaction_id) for alert in alerts if alert.transaction_id is not None
+            ],
+        },
+    )
     _commit(db, "Case or alert link conflicted with another request")
     return _detail(db, investigation)
 
@@ -561,17 +586,27 @@ def list_cases(
 @router.get("/{case_id}", response_model=CaseDetailResponse)
 def get_case(
     case_id: UUID,
-    _: Annotated[AuthPrincipal, Depends(require_permissions(Permission.CASES_READ))],
+    principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.CASES_READ))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseDetailResponse:
-    return _detail(db, _load_case(db, case_id))
+    investigation = _load_case(db, case_id)
+    append_audit_event(
+        db,
+        action="case.read",
+        target_type="case",
+        target_id=case_id,
+        actor_user_id=principal.user_id,
+        metadata={"schema_version": "audit-v1"},
+    )
+    db.commit()
+    return _detail(db, investigation)
 
 
 @router.patch("/{case_id}/assignment", response_model=CaseDetailResponse)
 def assign_case(
     case_id: UUID,
     request: AssignmentRequest,
-    _: Annotated[AuthPrincipal, Depends(require_permissions(Permission.CASES_WRITE))],
+    principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.CASES_WRITE))],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaseDetailResponse:
     investigation = _load_case(db, case_id, lock=True)
@@ -582,9 +617,29 @@ def assign_case(
         )
     if request.owner_user_id is not None:
         _valid_owner(db, request.owner_user_id)
+    previous_owner = investigation.owner_user_id
+    previous_version = investigation.version
     investigation.owner_user_id = request.owner_user_id
     investigation.updated_at = datetime.now(UTC)
     investigation.version += 1
+    append_audit_event(
+        db,
+        action="case.assigned",
+        target_type="case",
+        target_id=case_id,
+        actor_user_id=principal.user_id,
+        before_state={
+            "owner_user_id": str(previous_owner) if previous_owner else None,
+            "version": previous_version,
+        },
+        after_state={
+            "owner_user_id": str(investigation.owner_user_id)
+            if investigation.owner_user_id
+            else None,
+            "version": investigation.version,
+        },
+        metadata={"schema_version": "audit-v1"},
+    )
     _commit(db, "Concurrent case assignment conflict; refresh and retry")
     return _detail(db, investigation)
 
@@ -599,15 +654,30 @@ def add_comment(
     investigation = _load_case(db, case_id, lock=True)
     _check_version(investigation, request.expected_version)
     now = datetime.now(UTC)
-    db.add(
-        CaseComment(
-            case_id=case_id,
-            author_user_id=principal.user_id,
-            body=request.body,
-        )
+    comment = CaseComment(
+        id=uuid4(),
+        case_id=case_id,
+        author_user_id=principal.user_id,
+        body=request.body,
     )
+    db.add(comment)
+    previous_version = investigation.version
     investigation.updated_at = now
     investigation.version += 1
+    append_audit_event(
+        db,
+        action="case.comment_added",
+        target_type="case",
+        target_id=case_id,
+        actor_user_id=principal.user_id,
+        before_state={"version": previous_version},
+        after_state={"version": investigation.version},
+        metadata={
+            "schema_version": "audit-v1",
+            "comment_id": str(comment.id),
+            "body_length": len(request.body),
+        },
+    )
     _commit(db, "Concurrent case comment conflict; refresh and retry")
     return _detail(db, investigation)
 
@@ -628,6 +698,7 @@ def link_alerts(
         )
     alerts = _locked_alerts_for_link(db, request.alert_ids)
     now = datetime.now(UTC)
+    previous_version = investigation.version
     for alert in alerts:
         db.add(
             CaseAlert(
@@ -641,6 +712,22 @@ def link_alerts(
         alert.version += 1
     investigation.updated_at = now
     investigation.version += 1
+    append_audit_event(
+        db,
+        action="case.alerts_linked",
+        target_type="case",
+        target_id=case_id,
+        actor_user_id=principal.user_id,
+        before_state={"version": previous_version},
+        after_state={"version": investigation.version},
+        metadata={
+            "schema_version": "audit-v1",
+            "alert_ids": [str(alert.id) for alert in alerts],
+            "transaction_ids": [
+                str(alert.transaction_id) for alert in alerts if alert.transaction_id is not None
+            ],
+        },
+    )
     _commit(db, "Case or alert link conflicted with another request")
     return _detail(db, investigation)
 
@@ -666,7 +753,44 @@ def transition_case(
             datetime.now(UTC),
         )
     except ValueError as error:
+        append_audit_event(
+            db,
+            action="case.transitioned",
+            target_type="case",
+            target_id=case_id,
+            actor_user_id=principal.user_id,
+            result=AuditResult.DENIED,
+            correlation_id=request_id,
+            before_state={"status": investigation.status.value, "version": investigation.version},
+            metadata={
+                "schema_version": "audit-v1",
+                "requested_status": request.to_status.value,
+                "reason_code": "INVALID_TRANSITION",
+            },
+        )
+        db.commit()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     db.add(history)
+    append_audit_event(
+        db,
+        action="case.transitioned",
+        target_type="case",
+        target_id=case_id,
+        actor_user_id=principal.user_id,
+        correlation_id=history.correlation_id,
+        before_state={
+            "status": history.from_status.value if history.from_status else None,
+            "version": investigation.version - 1,
+        },
+        after_state={
+            "status": investigation.status.value,
+            "version": investigation.version,
+            "resolution_code": investigation.resolution_code,
+        },
+        metadata={
+            "schema_version": "audit-v1",
+            "alert_ids": [str(alert.id) for alert in linked_alerts],
+        },
+    )
     _commit(db, "Concurrent case transition conflict; refresh and retry")
     return _detail(db, investigation)

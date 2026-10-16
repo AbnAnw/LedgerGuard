@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ledgerguard import __version__
+from ledgerguard.audit import router as audit_router
 from ledgerguard.auth import access_router, auth_router
 from ledgerguard.cases import router as cases_router
 from ledgerguard.config import get_settings
@@ -40,6 +41,7 @@ app.include_router(dashboard_router)
 app.include_router(jobs_router)
 app.include_router(fraud_router)
 app.include_router(cases_router)
+app.include_router(audit_router)
 
 
 class LiveResponse(BaseModel):

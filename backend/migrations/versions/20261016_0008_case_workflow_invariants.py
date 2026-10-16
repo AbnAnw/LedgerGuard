@@ -36,8 +36,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_cases_resolution_summary_length",
         "cases",
-        "resolution_summary IS NULL OR "
-        "length(btrim(resolution_summary)) BETWEEN 1 AND 4000",
+        "resolution_summary IS NULL OR " "length(btrim(resolution_summary)) BETWEEN 1 AND 4000",
     )
     op.create_check_constraint(
         "ck_case_comments_body_length",
@@ -54,19 +53,13 @@ def upgrade() -> None:
         "case_status_history",
         "reason IS NOT NULL AND length(btrim(reason)) BETWEEN 1 AND 2000",
     )
-    op.create_index(
-        "ix_case_alerts_case_linked", "case_alerts", ["case_id", "linked_at"]
-    )
+    op.create_index("ix_case_alerts_case_linked", "case_alerts", ["case_id", "linked_at"])
 
 
 def downgrade() -> None:
     op.drop_index("ix_case_alerts_case_linked", table_name="case_alerts")
-    op.drop_constraint(
-        "ck_case_status_history_reason_length", "case_status_history", type_="check"
-    )
-    op.drop_constraint(
-        "ck_case_status_history_changed", "case_status_history", type_="check"
-    )
+    op.drop_constraint("ck_case_status_history_reason_length", "case_status_history", type_="check")
+    op.drop_constraint("ck_case_status_history_changed", "case_status_history", type_="check")
     op.drop_constraint("ck_case_comments_body_length", "case_comments", type_="check")
     op.drop_constraint("ck_cases_resolution_summary_length", "cases", type_="check")
     op.drop_constraint("ck_cases_resolution_required", "cases", type_="check")

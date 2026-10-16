@@ -23,7 +23,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 9 | Background processing | **Complete** |
 | Day 10 | Fraud rule engine | **Complete** |
 | Day 11 | Case-management workflow | **Complete** |
-| Day 12 | Audit logging | **Not started** |
+| Day 12 | Audit logging | **Complete** |
 | Day 13 | Reporting and export | **Not started** |
 | Day 14 | Comprehensive automated testing | **Not started** |
 | Day 15 | Observability | **Not started** |
@@ -160,7 +160,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 12 — Audit logging
 
-**Status: Not started**
+**Status: Complete**
 
 - Record authentication events and security-sensitive reads.
 - Record every write affecting transactions, rules, reconciliation results, alerts, and cases.

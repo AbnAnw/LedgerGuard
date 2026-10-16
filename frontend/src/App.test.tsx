@@ -59,6 +59,9 @@ describe("App", () => {
               }),
           });
         }
+        if (requestUrl.includes("/api/v1/audit/events")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
         return Promise.resolve({
           ok: true,
           json: () =>

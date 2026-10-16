@@ -16,12 +16,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ledgerguard.audit_service import append_audit_event
 from ledgerguard.auth import AuthPrincipal, Permission, get_current_principal
 from ledgerguard.config import get_settings
 from ledgerguard.db import SessionLocal, get_db
 from ledgerguard.models import (
     Account,
     AccountStatus,
+    AuditResult,
     BackgroundJob,
     BackgroundJobKind,
     BackgroundJobStatus,
@@ -149,6 +151,17 @@ def _create_or_replay_job(
     if existing is not None:
         if existing.status == BackgroundJobStatus.QUEUED:
             _publish_or_unavailable(existing.id)
+        append_audit_event(
+            db,
+            action="job.replayed",
+            target_type="background_job",
+            target_id=existing.id,
+            actor_user_id=principal.user_id,
+            correlation_id=existing.correlation_id,
+            job_id=existing.id,
+            metadata={"schema_version": "audit-v1", "kind": existing.kind.value},
+        )
+        db.commit()
         return existing, True
 
     job_id = uuid4()
@@ -171,6 +184,17 @@ def _create_or_replay_job(
     )
     try:
         db.add(job)
+        append_audit_event(
+            db,
+            action="job.queued",
+            target_type="background_job",
+            target_id=job.id,
+            actor_user_id=principal.user_id,
+            correlation_id=job.correlation_id,
+            job_id=job.id,
+            after_state={"status": job.status.value, "kind": job.kind.value},
+            metadata={"schema_version": "audit-v1"},
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -323,6 +347,17 @@ def _cancellation_checkpoint(db: Session, job_id: UUID, message: str) -> bool:
     job.status_message = message
     job.finished_at = datetime.now(UTC)
     job.payload = {}
+    append_audit_event(
+        db,
+        action="job.cancelled",
+        target_type="background_job",
+        target_id=job.id,
+        actor_user_id=job.requested_by_user_id,
+        correlation_id=job.correlation_id,
+        job_id=job.id,
+        after_state={"status": job.status.value, "cancellation_requested": True},
+        metadata={"schema_version": "audit-v1", "kind": job.kind.value},
+    )
     db.commit()
     return True
 
@@ -356,6 +391,22 @@ def _finish_job(
     job.reconciliation_run_id = reconciliation_run_id
     job.finished_at = datetime.now(UTC)
     job.payload = {}
+    append_audit_event(
+        db,
+        action="job.succeeded",
+        target_type="background_job",
+        target_id=job.id,
+        actor_user_id=job.requested_by_user_id,
+        correlation_id=job.correlation_id,
+        job_id=job.id,
+        before_state={"status": BackgroundJobStatus.RUNNING.value},
+        after_state={
+            "status": job.status.value,
+            "ingestion_batch_id": str(ingestion_batch_id) if ingestion_batch_id else None,
+            "reconciliation_run_id": str(reconciliation_run_id) if reconciliation_run_id else None,
+        },
+        metadata={"schema_version": "audit-v1", "kind": job.kind.value},
+    )
     db.commit()
     db.refresh(job)
     return _job_response(job)
@@ -374,6 +425,18 @@ def mark_job_failed(job_id: UUID, code: str, detail: str) -> BackgroundJobRespon
         job.status_message = "Processing failed."
         job.finished_at = datetime.now(UTC)
         job.payload = {}
+        append_audit_event(
+            db,
+            action="job.failed",
+            target_type="background_job",
+            target_id=job.id,
+            actor_user_id=job.requested_by_user_id,
+            result=AuditResult.FAILURE,
+            correlation_id=job.correlation_id,
+            job_id=job.id,
+            after_state={"status": job.status.value, "failure_code": job.failure_code},
+            metadata={"schema_version": "audit-v1", "kind": job.kind.value},
+        )
         db.commit()
         db.refresh(job)
         return _job_response(job)
@@ -412,6 +475,7 @@ def process_background_job_once(
             return _job_response(job)
         principal = _worker_principal(claim_db, job)
         kind = job.kind
+        correlation_id = job.correlation_id
 
     try:
         if kind == BackgroundJobKind.TRANSACTION_INGESTION:
@@ -446,6 +510,8 @@ def process_background_job_once(
                     principal,
                     str(payload["idempotency_key"]),
                     payload.get("original_filename"),
+                    audit_correlation_id=correlation_id,
+                    audit_job_id=job_id,
                 )
             with session_factory() as finish_db:
                 return _finish_job(finish_db, job_id, ingestion_batch_id=ingestion_result.batch_id)
@@ -464,7 +530,13 @@ def process_background_job_once(
                 return _job_response(cancelled_job)
         request = ReconciliationRunRequest.model_validate(payload["request"])
         with session_factory() as operation_db:
-            reconciliation_result = execute_reconciliation(operation_db, request, principal)
+            reconciliation_result = execute_reconciliation(
+                operation_db,
+                request,
+                principal,
+                audit_correlation_id=correlation_id,
+                audit_job_id=job_id,
+            )
         with session_factory() as progress_db:
             _update_progress(progress_db, job_id, 2, 3, "Evidence persisted; finalizing job.")
         with session_factory() as finish_db:
@@ -557,6 +629,20 @@ def cancel_background_job(
         job.payload = {}
     else:
         job.status_message = "Cancellation requested; waiting for a safe worker checkpoint."
+    append_audit_event(
+        db,
+        action="job.cancelled",
+        target_type="background_job",
+        target_id=job.id,
+        actor_user_id=principal.user_id,
+        correlation_id=job.correlation_id,
+        job_id=job.id,
+        after_state={
+            "status": job.status.value,
+            "cancellation_requested": True,
+        },
+        metadata={"schema_version": "audit-v1", "kind": job.kind.value},
+    )
     db.commit()
     db.refresh(job)
     return _job_response(job)

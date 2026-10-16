@@ -815,6 +815,59 @@ tbody tr:last-child td {
   justify-self: start;
 }
 
+.audit-controls {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.audit-case-form {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.audit-case-form label {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  color: #91a39d;
+  font-size: 0.78rem;
+}
+
+.audit-case-form input {
+  padding: 10px;
+  color: #e9f7f2;
+  background: #09120f;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 7px;
+}
+
+.audit-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-list li {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) 1fr;
+  gap: 5px 14px;
+  padding: 14px;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 8px;
+}
+
+.audit-list p,
+.audit-list small {
+  grid-column: 2;
+  margin: 0;
+  color: #91a39d;
+  overflow-wrap: anywhere;
+}
+
 .raw-evidence summary {
   cursor: pointer;
 }

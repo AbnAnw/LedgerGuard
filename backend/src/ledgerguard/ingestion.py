@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from ledgerguard.audit_service import append_audit_event
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
 from ledgerguard.config import Settings, get_settings
 from ledgerguard.db import get_db
@@ -415,6 +416,8 @@ def ingest_transactions(
     principal: AuthPrincipal,
     idempotency_key: str,
     original_filename: str | None = None,
+    audit_correlation_id: UUID | None = None,
+    audit_job_id: UUID | None = None,
 ) -> IngestionBatchResponse:
     """Validate every row and atomically persist the batch, evidence, and accepted facts."""
 
@@ -494,7 +497,7 @@ def ingest_transactions(
         duplicate_count=0,
         conflict_count=0,
         requested_by_user_id=principal.user_id,
-        correlation_id=uuid4(),
+        correlation_id=audit_correlation_id or uuid4(),
         started_at=now,
         version=1,
     )
@@ -628,6 +631,27 @@ def ingest_transactions(
             db.add_all(financial_facts)
             db.flush()
         db.add_all(evidence_records)
+        append_audit_event(
+            db,
+            action="transaction.ingestion.completed",
+            target_type="transaction_batch",
+            target_id=batch.id,
+            actor_user_id=principal.user_id,
+            correlation_id=batch.correlation_id,
+            job_id=audit_job_id,
+            after_state={
+                "status": batch.status.value,
+                "accepted_count": accepted_count,
+                "rejected_count": rejected_count,
+                "duplicate_count": duplicate_count,
+                "conflict_count": conflict_count,
+            },
+            metadata={
+                "schema_version": "audit-v1",
+                "source_system": metadata.source_system,
+                "transaction_ids": [str(item.id) for item in financial_facts],
+            },
+        )
         db.commit()
     except SQLAlchemyError:
         db.rollback()

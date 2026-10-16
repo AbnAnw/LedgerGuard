@@ -6,6 +6,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendRoot = Join-Path $repoRoot 'backend'
 $frontendRoot = Join-Path $repoRoot 'frontend'
 $python = Join-Path $backendRoot '.venv/Scripts/python.exe'
+$frontendTemp = Join-Path $repoRoot 'tmp/frontend-check'
 
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw 'Backend virtual environment is missing. Run ./scripts/bootstrap.ps1 first.'
@@ -27,6 +28,11 @@ try {
     Pop-Location
 }
 
+$previousTemp = $env:TEMP
+$previousTmp = $env:TMP
+New-Item -ItemType Directory -Path $frontendTemp -Force | Out-Null
+$env:TEMP = $frontendTemp
+$env:TMP = $frontendTemp
 Push-Location $frontendRoot
 try {
     npm run lint
@@ -39,6 +45,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
 } finally {
     Pop-Location
+    $env:TEMP = $previousTemp
+    $env:TMP = $previousTmp
 }
 
 Write-Output 'All LedgerGuard checks passed.'
