@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 12 is complete: authentication, permission denials, sensitive reads, background jobs, ingestion, reconciliation, rule changes, alerts, and case activity now emit structured audit evidence. PostgreSQL enforces append-only history, and auditors receive a filterable history plus a transaction-to-case evidence timeline while other roles remain denied.
+Day 13 is complete: administrators, operations analysts, and auditors can load UTC-scoped daily reconciliation summaries and current unresolved-case reports, then export fixed-field CSV files. Financial totals are calculated twice and withheld on any mismatch; spreadsheet-control characters are neutralized before export, and every report view or export is audited.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -86,6 +86,8 @@ After fraud evaluation, use the Cases workspace to create a case from an unclaim
 
 Sign in as the synthetic auditor and open Audit history to filter immutable events or reconstruct a case from transaction ingestion through alert generation and resolution. The [audit-logging contract](docs/architecture/AUDIT_LOGGING.md) defines required fields, redaction, append-only enforcement, and access boundaries.
 
+Open Reports as any supported role to select a UTC date, review independently verified transaction and settlement totals, inspect the latest reconciliation snapshot, and export safe daily or unresolved-case CSV files. A fresh reconciliation seed places its fixed source facts on `2026-01-15` UTC. The [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md) defines scope, cutoff, total verification, explicit fields, and spreadsheet-injection controls.
+
 After the seed and first reconciliation run, sign in through `http://localhost:5173` as the synthetic analyst to review the operational dashboard. Non-exact results are prioritised by decimal-safe unresolved exposure; search, classification, and sort controls lead to the canonical evidence panel. The synthetic auditor sees the same evidence without run controls.
 
 ## Engineering principles
@@ -114,6 +116,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/architecture/BACKGROUND_PROCESSING.md` — durable jobs, delivery, retries, cancellation, and worker operations
 - `docs/architecture/CASE_MANAGEMENT.md` — investigation aggregate, lifecycle, concurrency, queue, and permission contract
 - `docs/architecture/AUDIT_LOGGING.md` — structured event vocabulary, evidence limits, append-only enforcement, and auditor timeline contract
+- `docs/architecture/REPORTING_AND_EXPORT.md` — UTC report scope, independent total verification, fixed CSV fields, and spreadsheet safety
 - `docs/ui/ANALYST_DASHBOARD.md` — dashboard metrics, states, role behaviour, prioritisation, and acceptance matrix
 
 ## License and usage

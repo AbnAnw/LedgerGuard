@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 12 — Audit logging: Complete**
+**Day 13 — Reporting and export: Complete**
 
 ## Completed days
 
@@ -18,10 +18,11 @@
 - **Day 10 (2026-10-16):** Added five configurable deterministic fraud-rule families, immutable activated versions, canonical alert evidence and replay deduplication, positive/negative synthetic scenarios, administrator/analyst/auditor permissions, and a role-aware fraud-monitoring interface.
 - **Day 11 (2026-10-16):** Added version-protected investigation cases with alert claiming, valid assignment, append-only comments and status history, controlled review/escalation/resolution/reopening, linked-alert status effects, queue filters, role enforcement, database invariants, and an analyst/auditor case workspace.
 - **Day 12 (2026-10-16):** Added structured audit evidence for authentication, authorization denials, sensitive reads, durable jobs, ingestion, reconciliation, rule versions, alerts, and cases; enforced validated/redacted event payloads and append-only PostgreSQL history; and added auditor-only filtering and transaction-to-case reconstruction in the API and interface.
+- **Day 13 (2026-10-16):** Added account/date-scoped daily reconciliation summaries and cutoff-bounded unresolved-case reports; independently verified exact decimal totals against separate PostgreSQL aggregates; implemented fixed-field CSV exports with spreadsheet-formula neutralization; audited report views/exports; and added loading, empty, failure, and export interface states for all supported roles.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The audit module owns a validated event vocabulary, bounded before/after evidence, redacted metadata, auditor-only queries, and transaction-to-case reconstruction; PostgreSQL reinforces actor pairing, action/target formats, JSON object shape, ordering indexes, and immutable rows. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, case, and audit state. The interface preserves money as strings, labels UTC, removes mutation controls for auditors, and hides audit history from non-auditors. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The reporting module builds read-only projections directly from authoritative facts, verifies row-level Python `Decimal` totals against independent SQL aggregates, fails closed on disagreement, emits fixed-field formula-safe CSV, and audits every view/export. The audit module provides bounded/redacted evidence and auditor-only reconstruction. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, case, audit, and report-source state. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit loading, empty, held-report, and export states. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -75,6 +76,9 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Restrict case ownership to active administrators or operations analysts. Auditors retain complete case evidence reads but receive no mutation endpoint or interface controls.
 - Route security and domain events through one audit writer that validates action and target names, rejects secret-like keys and oversized evidence, stores only structured JSON objects, and participates in the same database transaction as the affected write.
 - Treat audit reads as security-sensitive events themselves. Only auditors and administrators may query history; case reconstruction follows explicit case-alert-transaction links and never relies on free-text matching.
+- Define daily financial scope as posted transactions by `occurred_at` and confirmed settlements by `settled_at` in a half-open UTC day, grouped without currency conversion.
+- Calculate every daily count and amount from individual facts with `Decimal`, independently repeat the calculation with PostgreSQL `COUNT`/`SUM`, and return neither JSON nor CSV if currency sets, counts, or exact totals disagree.
+- Export only fixed server-side fields. Neutralize cells whose first non-whitespace character is `=`, `+`, `-`, or `@` (and tab/line-control prefixes) before the standard CSV writer quotes them.
 
 ## Commands required to run the system
 
@@ -103,6 +107,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-10.ps1
 ./scripts/validate-day-11.ps1
 ./scripts/validate-day-12.ps1
+./scripts/validate-day-13.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -120,7 +125,16 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 
 ## Test and coverage results
 
-- Day 12 backend quality checks: Ruff formatting and linting passed across 31 source/test/migration files; strict mypy found no issues in 17 source files.
+- Day 13 complete quality suite: Ruff formatting and linting passed across 43 backend source/test/migration files; strict mypy found no issues in 18 source files; Alembic rendered all nine revisions offline through `20261016_0009`.
+- Day 13 backend suite: 157 passed and 6 opt-in integration tests skipped in 8.67 seconds; one upstream Starlette/AnyIO deprecation warning remains. Measured statement coverage was 74% overall (2,786 statements, 715 missed) and 76% for the new reporting module.
+- Day 13 focused report suite: 18 passed in 3.26 seconds, covering exact decimal aggregation, mismatch refusal, supported and unsupported roles, UTC validation, explicit CSV fields, formula controls, report auditing, and JSON/CSV behaviour.
+- Day 13 live integration suite: 6 passed in 6.04 seconds against PostgreSQL revision `20261016_0009`, Redis, and the Celery worker.
+- Day 13 frontend checks: ESLint and TypeScript checking passed; 21 tests passed across seven Vitest files in 8.04 seconds; the production build transformed 22 modules and produced a 191.01 kB JavaScript bundle (57.32 kB gzip) and 16.17 kB CSS bundle (4.17 kB gzip).
+- Live daily report and independent SQL proof: four posted USD transactions totalled `250.000000`; five confirmed USD settlements totalled `215.000000`; both the API and direct PostgreSQL queries returned those exact values, and the report returned verified difference `-35.000000` plus a five-result reconciliation snapshot.
+- Live safe-export proof: the daily CSV used its documented fixed header and neutralized the negative difference; an unresolved synthetic case titled `=2+2 synthetic export proof` was exported with an apostrophe prefix. Audit history recorded `report.daily.view`, `report.daily.export`, `report.unresolved.view`, and `report.unresolved.export`.
+- Live platform smoke check: the frontend returned HTTP 200 and API readiness reported both PostgreSQL and Redis `up`.
+
+- Day 12 backend quality checks: Ruff formatting and linting passed across 41 source/test/migration files; strict mypy found no issues in 17 source files.
 - Day 12 backend suite: 139 passed and 6 opt-in integration tests skipped in 7.78 seconds; one upstream Starlette/AnyIO deprecation warning remains. Measured statement coverage was 74% overall (2,596 statements, 669 missed), 70% for the audit API, and 95% for the shared audit writer.
 - Day 12 live integration suite: 6 passed in 5.94 seconds against PostgreSQL revision `20261016_0009`, including the audit constraints, append-only trigger, Redis connection, and worker checks.
 - Day 12 frontend checks: ESLint and TypeScript checking passed; 18 tests passed across six Vitest files; the production build transformed 21 modules and produced a 182.53 kB JavaScript bundle (55.72 kB gzip) and 14.40 kB CSS bundle (3.84 kB gzip).
@@ -270,7 +284,7 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 ## Known issues
 
 - MFA, password reset, external identity-provider integration, and authentication rate limiting are not implemented; rate limiting and the wider threat review are scheduled for Day 16.
-- Reports and exports are not yet implemented; scoped daily reconciliation, unresolved-case reporting, independent total verification, and CSV injection defence are scheduled for Day 13.
+- The unresolved-case report is intentionally a current-state queue bounded by case creation cutoff; it is not a historical status-as-of reconstruction. A historical snapshot would require replaying case status history and is outside Day 13 scope.
 - Fraud thresholds and scores are deterministic demonstration controls, not validated fraud policy, probability estimates, or claims of detection accuracy.
 - Retention periods are unratified design assumptions pending Day 16; the production queue choice remains a Day 19 decision.
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
@@ -284,15 +298,15 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 
 ## Blockers
 
-None for Day 12. Automated component, API, PostgreSQL, Redis, worker, migration, append-only, permission, evidence-chain, and production-build verification completed using synthetic data.
+None for Day 13. Automated component, API, PostgreSQL, independent-total, permission, CSV-safety, audit, and production-build verification completed using synthetic data.
 
 ## Notion synchronization
 
-Day 12 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
+Day 13 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
 
 ## Next day's objective
 
-Day 13 will add scoped daily reconciliation and unresolved-case reports, independently verified decimal totals, allowlisted CSV exports with spreadsheet-formula neutralisation, and audit evidence for report views and exports.
+Day 14 will broaden unit, database, worker, and end-to-end coverage for critical workflows and configure CI to run formatting, linting, type checking, backend/frontend tests, Playwright journeys, and production builds reliably.
 
 ## Latest commit hash
 

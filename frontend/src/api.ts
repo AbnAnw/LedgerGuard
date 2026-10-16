@@ -565,3 +565,136 @@ export async function fetchCaseAuditTrail(
   if (!response.ok) throw new ApiError("Case audit trail could not be loaded.", response.status);
   return (await response.json()) as CaseAuditTrail;
 }
+
+export interface ReportCurrencyTotals {
+  currency: string;
+  transaction_count: number;
+  transaction_total: string;
+  settlement_count: number;
+  settlement_total: string;
+  difference: string;
+}
+
+export interface DailyReconciliationReport {
+  report_date: string;
+  window_start: string;
+  window_end: string;
+  generated_at: string;
+  account_id: string;
+  source_system: string;
+  source_account_id: string;
+  totals_verified: boolean;
+  currency_totals: ReportCurrencyTotals[];
+  reconciliation_snapshot: null | {
+    run_id: string;
+    input_cutoff_at: string;
+    algorithm_version: string;
+    result_count: number;
+    classifications: Array<{
+      classification: ReconciliationClassification;
+      result_count: number;
+      transaction_total: string;
+      settlement_total: string;
+      difference_total: string;
+    }>;
+  };
+}
+
+export interface UnresolvedCaseReport {
+  cutoff_at: string;
+  generated_at: string;
+  case_count: number;
+  cases: Array<{
+    case_id: string;
+    case_number: number;
+    title: string;
+    status: CaseStatus;
+    priority: CasePriority;
+    owner_user_id: string | null;
+    owner_display_name: string | null;
+    created_at: string;
+    age_hours: number;
+    alert_count: number;
+    rule_codes: string[];
+  }>;
+}
+
+const reportAccount = {
+  sourceSystem: "synthetic-reconciliation",
+  sourceAccountId: "DEMO-RECON-001",
+} as const;
+
+function reportHeaders(token: string) {
+  return { Accept: "application/json", Authorization: `Bearer ${token}` };
+}
+
+function dailyReportQuery(reportDate: string) {
+  return new URLSearchParams({
+    report_date: reportDate,
+    source_system: reportAccount.sourceSystem,
+    source_account_id: reportAccount.sourceAccountId,
+  });
+}
+
+export async function fetchDailyReconciliationReport(
+  token: string,
+  reportDate: string,
+  signal?: AbortSignal,
+): Promise<DailyReconciliationReport> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/reports/daily-reconciliation?${dailyReportQuery(reportDate)}`,
+    { headers: reportHeaders(token), signal },
+  );
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 503
+        ? "Independent totals did not match, so the report was withheld."
+        : "Daily reconciliation report could not be loaded.",
+      response.status,
+    );
+  }
+  return (await response.json()) as DailyReconciliationReport;
+}
+
+export async function fetchUnresolvedCaseReport(
+  token: string,
+  cutoffAt: string,
+  signal?: AbortSignal,
+): Promise<UnresolvedCaseReport> {
+  const params = new URLSearchParams({ cutoff_at: cutoffAt });
+  const response = await fetch(`${apiBaseUrl}/api/v1/reports/unresolved-cases?${params}`, {
+    headers: reportHeaders(token),
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError("Unresolved-case report could not be loaded.", response.status);
+  }
+  return (await response.json()) as UnresolvedCaseReport;
+}
+
+async function downloadCsv(token: string, url: string, fallbackName: string) {
+  const response = await fetch(url, {
+    headers: { Accept: "text/csv", Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new ApiError("CSV export could not be generated.", response.status);
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
+  return { blob: await response.blob(), filename };
+}
+
+export function downloadDailyReconciliationCsv(token: string, reportDate: string) {
+  return downloadCsv(
+    token,
+    `${apiBaseUrl}/api/v1/reports/daily-reconciliation.csv?${dailyReportQuery(reportDate)}`,
+    "ledgerguard-daily-reconciliation.csv",
+  );
+}
+
+export function downloadUnresolvedCasesCsv(token: string, cutoffAt: string) {
+  const params = new URLSearchParams({ cutoff_at: cutoffAt });
+  return downloadCsv(
+    token,
+    `${apiBaseUrl}/api/v1/reports/unresolved-cases.csv?${params}`,
+    "ledgerguard-unresolved-cases.csv",
+  );
+}

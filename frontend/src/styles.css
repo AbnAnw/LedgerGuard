@@ -868,6 +868,131 @@ tbody tr:last-child td {
   overflow-wrap: anywhere;
 }
 
+.report-date-form {
+  display: grid;
+  min-width: 320px;
+  gap: 7px;
+  color: #91a39d;
+  font-size: 0.78rem;
+}
+
+.report-date-form > div {
+  display: flex;
+  gap: 8px;
+}
+
+.report-date-form input {
+  min-width: 160px;
+  padding: 10px;
+  color: #e9f7f2;
+  color-scheme: dark;
+  background: #09120f;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 7px;
+}
+
+.report-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.report-panel {
+  padding: 24px;
+  background: rgb(1 8 6 / 42%);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 12px;
+}
+
+.report-panel .panel-heading p,
+.report-snapshot > p,
+.inline-note,
+.report-case-list p,
+.report-case-list small {
+  color: #82948e;
+  font-size: 0.78rem;
+}
+
+.verified-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 9px;
+  padding: 6px 9px;
+  color: #78e7bc;
+  background: rgb(96 230 181 / 7%);
+  border: 1px solid rgb(96 230 181 / 28%);
+  border-radius: 999px;
+  font: 600 10px/1 ui-monospace, "Cascadia Code", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.report-snapshot {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 8px;
+}
+
+.report-snapshot summary {
+  color: #cbd8d3;
+  cursor: pointer;
+}
+
+.report-snapshot ul,
+.report-case-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.report-snapshot li {
+  display: flex;
+  justify-content: space-between;
+  color: #91a39d;
+  font-size: 0.8rem;
+}
+
+.report-case-list li {
+  padding: 15px;
+  background: rgb(255 255 255 / 3%);
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 8px;
+}
+
+.report-case-list li > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.report-case-list p,
+.report-case-list small {
+  display: block;
+  margin: 7px 0 0;
+}
+
+.priority-tag {
+  padding: 5px 7px;
+  color: #ffd181;
+  border: 1px solid rgb(255 180 68 / 30%);
+  border-radius: 999px;
+  font: 600 9px/1 ui-monospace, "Cascadia Code", monospace;
+  text-transform: uppercase;
+}
+
+.priority-tag--critical {
+  color: #ff9c91;
+  border-color: rgb(255 127 112 / 35%);
+}
+
+.report-export-error {
+  margin: 0;
+}
+
 .raw-evidence summary {
   cursor: pointer;
 }
@@ -1082,6 +1207,15 @@ h2 {
   .run-controls {
     width: 100%;
     min-width: 0;
+  }
+
+  .report-date-form {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .report-date-form > div {
+    flex-wrap: wrap;
   }
 
   .run-controls > div {
