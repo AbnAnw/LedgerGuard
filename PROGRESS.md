@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 13 — Reporting and export: Complete**
+**Day 14 — Comprehensive automated testing: Complete**
 
 ## Completed days
 
@@ -19,10 +19,11 @@
 - **Day 11 (2026-10-16):** Added version-protected investigation cases with alert claiming, valid assignment, append-only comments and status history, controlled review/escalation/resolution/reopening, linked-alert status effects, queue filters, role enforcement, database invariants, and an analyst/auditor case workspace.
 - **Day 12 (2026-10-16):** Added structured audit evidence for authentication, authorization denials, sensitive reads, durable jobs, ingestion, reconciliation, rule versions, alerts, and cases; enforced validated/redacted event payloads and append-only PostgreSQL history; and added auditor-only filtering and transaction-to-case reconstruction in the API and interface.
 - **Day 13 (2026-10-16):** Added account/date-scoped daily reconciliation summaries and cutoff-bounded unresolved-case reports; independently verified exact decimal totals against separate PostgreSQL aggregates; implemented fixed-field CSV exports with spreadsheet-formula neutralization; audited report views/exports; and added loading, empty, failure, and export interface states for all supported roles.
+- **Day 14 (2026-10-19):** Published a risk-based automated test strategy; expanded exact-money, permission, reconciliation, fraud-boundary, case-concurrency, retry, database, and real-worker coverage; added Chromium journeys for all three roles; and configured GitHub Actions to run backend, frontend, integration, browser, migration, and production-build gates.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The reporting module builds read-only projections directly from authoritative facts, verifies row-level Python `Decimal` totals against independent SQL aggregates, fails closed on disagreement, emits fixed-field formula-safe CSV, and audits every view/export. The audit module provides bounded/redacted evidence and auditor-only reconstruction. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, case, audit, and report-source state. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit loading, empty, held-report, and export states. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines the five-service local platform. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. The reporting module builds read-only projections directly from authoritative facts, verifies row-level Python `Decimal` totals against independent SQL aggregates, fails closed on disagreement, emits fixed-field formula-safe CSV, and audits every view/export. The audit module provides bounded/redacted evidence and auditor-only reconstruction. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, case, audit, and report-source state. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit loading, empty, held-report, and export states. A three-job GitHub Actions pipeline now separates backend and frontend quality gates from an isolated Compose integration/browser gate; Playwright validates administrator, analyst, and auditor journeys against the assembled application. Validated settings use safe local defaults and environment overrides. GCP-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -79,6 +80,9 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Define daily financial scope as posted transactions by `occurred_at` and confirmed settlements by `settled_at` in a half-open UTC day, grouped without currency conversion.
 - Calculate every daily count and amount from individual facts with `Decimal`, independently repeat the calculation with PostgreSQL `COUNT`/`SUM`, and return neither JSON nor CSV if currency sets, counts, or exact totals disagree.
 - Export only fixed server-side fields. Neutralize cells whose first non-whitespace character is `=`, `+`, `-`, or `@` (and tab/line-control prefixes) before the standard CSV writer quotes them.
+- Apply a risk-based test pyramid: keep deterministic domain cases at unit level, prove PostgreSQL/Redis/Celery differences through opt-in integration tests, and reserve Playwright for assembled role journeys.
+- Keep browser selectors accessibility-oriented and role journeys independent. Run Chromium serially against the documented `http://localhost:5173` origin, retain diagnostics only on failure, and never commit browser artifacts.
+- Split CI into independent locked backend/frontend jobs and a dependent isolated Compose job. Always tear down CI volumes; upload browser and service diagnostics only when the assembled gate fails.
 
 ## Commands required to run the system
 
@@ -108,6 +112,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-11.ps1
 ./scripts/validate-day-12.ps1
 ./scripts/validate-day-13.ps1
+./scripts/validate-day-14.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -123,7 +128,25 @@ The unchanged Docker defaults seed `admin@ledgerguard.invalid`, `analyst@ledgerg
 
 Open `http://localhost:5173` after seeding and running reconciliation. The analyst account receives the operational dashboard and run controls; the auditor account receives the same evidence in read-only mode.
 
+Install Chromium once and run the administrator, operations analyst, and auditor browser journeys
+against the healthy seeded stack:
+
+```powershell
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
 ## Test and coverage results
+
+- Day 14 backend quality gates: Ruff formatting and linting passed across 43 source/test/migration files; strict mypy found no issues in 18 source files; the full isolated suite completed with 164 passed, 8 opt-in integration tests skipped, and one upstream Starlette/AnyIO deprecation warning in 9.13 seconds.
+- Day 14 measured backend coverage: 74% overall (2,786 statements, 713 missed). This is a measured observation, not a project-wide coverage target or assurance claim.
+- Day 14 live integration suite: 8 passed in 6.43 seconds against PostgreSQL revision `20261016_0009`, Redis, and Celery after a clean development-image rebuild. Coverage includes database invariants, broker/worker health, a real queued worker task, durable retry state, terminal payload removal, and cleanup.
+- Day 14 frontend gates: ESLint and TypeScript checking passed; 21 Vitest tests passed across seven files in 8.25 seconds; the production build transformed 22 modules and produced a 191.01 kB JavaScript bundle (57.32 kB gzip) and 16.17 kB CSS bundle (4.17 kB gzip); the locked dependency audit found 0 known vulnerabilities.
+- Day 14 Playwright journeys: 3 passed in Chromium in 6.1 seconds against the rebuilt live stack, covering administrator oversight, analyst investigation controls, and auditor read-only evidence access.
+- Day 14 Compose reproducibility: `docker compose up -d --build --wait` rebuilt all application images, all five services reached their expected running/healthy state, all three synthetic seed commands completed idempotently, and the integration suite ran from the same development image used by CI.
+- GitHub Actions now defines backend formatting/linting/type/test/coverage/migration gates, frontend lint/type/test/build gates, and an isolated Compose integration/Playwright gate with failure-only diagnostics and unconditional cleanup. The workflow will receive its first hosted run when this daily commit is pushed; no hosted result is claimed here.
+- Day 1–14 structural validators, Markdown local-link validation, secret-pattern review, and Git whitespace/error checks passed with no findings.
 
 - Day 13 complete quality suite: Ruff formatting and linting passed across 43 backend source/test/migration files; strict mypy found no issues in 18 source files; Alembic rendered all nine revisions offline through `20261016_0009`.
 - Day 13 backend suite: 157 passed and 6 opt-in integration tests skipped in 8.67 seconds; one upstream Starlette/AnyIO deprecation warning remains. Measured statement coverage was 74% overall (2,786 statements, 715 missed) and 76% for the new reporting module.
@@ -294,19 +317,20 @@ Open `http://localhost:5173` after seeding and running reconciliation. The analy
 - The JSON ingestion envelope accepts at most 10,000 records and CSV uploads remain capped at 2 MB by default. Day 17 will publish controlled throughput and resilience measurements rather than extrapolating from the Day 9 local smoke measurement.
 - The isolated Day 7 settlement facts are loaded by a production-blocked synthetic seeder. A public settlement-ingestion contract is not yet implemented and must exist before production deployment.
 - No manual rendered screenshot was captured for Day 11; interface behaviour was exercised through 17 component tests, a production build, and live API/role checks.
+- Playwright browser binaries are intentionally not part of the repository; local browser journeys require the documented one-time `npx playwright install chromium` download. CI installs Chromium in its isolated runner.
 - A commit cannot embed its own final Git hash without changing that hash. This file therefore identifies the latest completed daily commit as `HEAD`; the exact short hash is reported after commit and can always be resolved with `git rev-parse --short HEAD`.
 
 ## Blockers
 
-None for Day 13. Automated component, API, PostgreSQL, independent-total, permission, CSV-safety, audit, and production-build verification completed using synthetic data.
+None for Day 14. Automated unit, component, API, PostgreSQL, Redis, Celery, Chromium, container-build, and production-build verification completed using synthetic data.
 
 ## Notion synchronization
 
-Day 13 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
+Day 14 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
 
 ## Next day's objective
 
-Day 14 will broaden unit, database, worker, and end-to-end coverage for critical workflows and configure CI to run formatting, linting, type checking, backend/frontend tests, Playwright journeys, and production builds reliably.
+Day 15 will add structured and redacted logs, request/job correlation, metrics, traces, dependency-aware health checks, an operational dashboard, and a demonstrated API-to-worker failure trace.
 
 ## Latest commit hash
 

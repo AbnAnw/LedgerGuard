@@ -148,6 +148,22 @@ def test_wrapped_suspicious_time_window_is_half_open() -> None:
     assert evaluate_rule(overnight, at_three, (at_three,), at_three.occurred_at) is None
 
 
+def test_unusual_amount_uses_exact_decimal_threshold_boundary() -> None:
+    amount_rule = rule(
+        1,
+        FraudRuleType.UNUSUAL_AMOUNT,
+        {"amount_threshold": "100.000001"},
+    )
+    below = fact(1, minutes=0, amount="100.000000")
+    at_threshold = fact(2, minutes=1, amount="100.000001")
+
+    assert evaluate_rule(amount_rule, below, (below,), BASE_TIME) is None
+    decision = evaluate_rule(amount_rule, at_threshold, (at_threshold,), BASE_TIME)
+    assert decision is not None
+    assert decision.evidence["evaluated_inputs"]["metric"] == "100.000001"
+    assert decision.evidence["evaluated_inputs"]["threshold"] == "100.000001"
+
+
 @pytest.mark.parametrize(
     ("rule_type", "parameters"),
     [

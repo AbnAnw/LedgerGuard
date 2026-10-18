@@ -6,7 +6,7 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 13 is complete: administrators, operations analysts, and auditors can load UTC-scoped daily reconciliation summaries and current unresolved-case reports, then export fixed-field CSV files. Financial totals are calculated twice and withheld on any mismatch; spreadsheet-control characters are neutralized before export, and every report view or export is audited.
+Day 14 is complete: the domain, API, database, worker, React, and assembled browser paths are covered by a documented risk-based test strategy. GitHub Actions now runs backend and frontend quality gates plus isolated PostgreSQL/Redis/Celery integration tests and Chromium journeys for administrators, operations analysts, and auditors.
 
 ## Users and least privilege
 
@@ -32,7 +32,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [automated test strategy](docs/architecture/TEST_STRATEGY.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -72,6 +72,14 @@ For native tooling, install dependencies and run all checks:
 ```powershell
 ./scripts/bootstrap.ps1
 ./scripts/check.ps1
+```
+
+With the seeded Docker stack running, install Chromium once and run the three role journeys:
+
+```powershell
+cd frontend
+npx playwright install chromium
+npm run test:e2e
 ```
 
 See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migration, health, configuration, and shutdown details. `.env` is optional for the safe local defaults and must never be committed.
@@ -117,6 +125,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/architecture/CASE_MANAGEMENT.md` — investigation aggregate, lifecycle, concurrency, queue, and permission contract
 - `docs/architecture/AUDIT_LOGGING.md` — structured event vocabulary, evidence limits, append-only enforcement, and auditor timeline contract
 - `docs/architecture/REPORTING_AND_EXPORT.md` — UTC report scope, independent total verification, fixed CSV fields, and spreadsheet safety
+- `docs/architecture/TEST_STRATEGY.md` — risk matrix, test layers, role journeys, CI isolation, and acceptance gates
 - `docs/ui/ANALYST_DASHBOARD.md` — dashboard metrics, states, role behaviour, prioritisation, and acceptance matrix
 
 ## License and usage

@@ -5,5 +5,4 @@ __pycache__
 .mypy_cache
 .coverage
 htmlcov
-tests
 *.pyc

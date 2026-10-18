@@ -147,6 +147,23 @@ docker run --rm --network ledgerguard_default `
 
 Use `.env` values instead of the displayed local-only placeholders when you customise Compose.
 
+Run the browser role journeys after the stack is healthy and all three synthetic seeds have been
+loaded:
+
+```powershell
+docker compose exec api ledgerguard-seed
+docker compose exec api ledgerguard-seed-reconciliation
+docker compose exec api ledgerguard-seed-fraud
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright tests `http://localhost:5173` because that origin matches the local CORS contract. The
+suite covers administrator, operations analyst, and auditor navigation and control visibility.
+Generated traces, screenshots, reports, and browser binaries are ignored by Git. See the
+[automated test strategy](../architecture/TEST_STRATEGY.md) for the risk matrix and CI topology.
+
 ## Migration and seed commands
 
 Create schema:

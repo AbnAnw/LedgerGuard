@@ -264,6 +264,20 @@ def test_reference_and_currency_mismatches_never_match() -> None:
     )
 
 
+def test_six_decimal_places_do_not_collapse_into_a_false_exact_match() -> None:
+    decisions = build_reconciliation_decisions(
+        [transaction(1, "REF-PRECISION", "0.100001")],
+        [settlement(101, "REF-PRECISION", "0.100002")],
+        72,
+    )
+
+    assert len(decisions) == 1
+    assert decisions[0].classification is ReconciliationClassification.PARTIAL_MATCH
+    assert decisions[0].transaction_total == Decimal("0.100001")
+    assert decisions[0].settlement_total == Decimal("0.100002")
+    assert decisions[0].difference_amount == Decimal("0.000001")
+
+
 def test_request_rejects_naive_cutoff_and_normalizes_offsets_to_utc() -> None:
     with pytest.raises(ValidationError, match="must include a UTC offset"):
         ReconciliationRunRequest(

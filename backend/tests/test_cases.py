@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,7 @@ from ledgerguard.auth import AuthPrincipal, get_current_principal
 from ledgerguard.cases import (
     ResolutionCode,
     TransitionRequest,
+    _check_version,
     apply_transition,
     validate_resolution,
     validate_transition,
@@ -103,6 +105,19 @@ def test_invalid_or_same_state_transitions_are_rejected(
 ) -> None:
     with pytest.raises(ValueError, match="not allowed"):
         validate_transition(current, target)
+
+
+def test_stale_case_version_is_rejected_before_mutation() -> None:
+    case = investigation(CaseStatus.IN_REVIEW)
+    case.version = 3
+
+    with pytest.raises(HTTPException) as error:
+        _check_version(case, 2)
+
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == "CASE_VERSION_CONFLICT"
+    assert case.status is CaseStatus.IN_REVIEW
+    assert case.version == 3
 
 
 def test_resolution_requires_code_and_summary_and_rejects_them_elsewhere() -> None:

@@ -163,6 +163,48 @@ def test_role_permissions_are_least_privilege() -> None:
 
 
 @pytest.mark.parametrize(
+    ("role", "expected"),
+    [
+        ("administrator", frozenset(Permission)),
+        (
+            "operations_analyst",
+            frozenset(
+                {
+                    Permission.INGESTION_WRITE,
+                    Permission.TRANSACTIONS_READ,
+                    Permission.RECONCILIATION_READ,
+                    Permission.RECONCILIATION_WRITE,
+                    Permission.ALERTS_READ,
+                    Permission.ALERTS_WRITE,
+                    Permission.CASES_READ,
+                    Permission.CASES_WRITE,
+                    Permission.REPORTS_READ,
+                }
+            ),
+        ),
+        (
+            "auditor",
+            frozenset(
+                {
+                    Permission.TRANSACTIONS_READ,
+                    Permission.RECONCILIATION_READ,
+                    Permission.ALERTS_READ,
+                    Permission.CASES_READ,
+                    Permission.REPORTS_READ,
+                    Permission.AUDIT_READ,
+                }
+            ),
+        ),
+        ("unknown_role", frozenset()),
+    ],
+)
+def test_complete_permission_matrix_is_deny_by_default(
+    role: str, expected: frozenset[Permission]
+) -> None:
+    assert make_principal(role).permissions == expected
+
+
+@pytest.mark.parametrize(
     ("role", "admin_status", "operations_status", "audit_status"),
     [
         ("administrator", 200, 200, 200),

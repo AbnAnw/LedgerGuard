@@ -25,7 +25,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 11 | Case-management workflow | **Complete** |
 | Day 12 | Audit logging | **Complete** |
 | Day 13 | Reporting and export | **Complete** |
-| Day 14 | Comprehensive automated testing | **Not started** |
+| Day 14 | Comprehensive automated testing | **Complete** |
 | Day 15 | Observability | **Not started** |
 | Day 16 | Security and privacy review | **Not started** |
 | Day 17 | Performance and resilience | **Not started** |
@@ -182,7 +182,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 14 — Comprehensive automated testing
 
-**Status: Not started**
+**Status: Complete**
 
 - Expand unit tests for matching, rules, permissions, transitions, money handling, and idempotency.
 - Add database and worker integration tests including failures and retries.
