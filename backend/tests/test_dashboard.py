@@ -244,6 +244,7 @@ def test_authorized_roles_can_read_dashboard(
 
 def test_unknown_role_cannot_read_dashboard(client: TestClient) -> None:
     app.dependency_overrides[get_current_principal] = lambda: principal("unknown_role")
+    app.dependency_overrides[get_db] = lambda: MagicMock(spec=Session)
 
     response = client.get(
         "/api/v1/dashboard/overview",

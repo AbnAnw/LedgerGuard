@@ -221,6 +221,7 @@ def test_api_enforces_role_boundaries(
     audit_status: int,
 ) -> None:
     app.dependency_overrides[get_current_principal] = lambda: make_principal(role)
+    app.dependency_overrides[get_db] = lambda: MagicMock(spec=Session)
 
     assert client.get("/api/v1/access/administration").status_code == admin_status
     assert client.get("/api/v1/access/operations").status_code == operations_status

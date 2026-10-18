@@ -204,6 +204,7 @@ def test_auditor_can_read_rules_but_cannot_run_evaluation(client: TestClient) ->
 
 def test_analyst_cannot_change_rule_configuration(client: TestClient) -> None:
     app.dependency_overrides[get_current_principal] = lambda: principal("operations_analyst")
+    app.dependency_overrides[get_db] = lambda: MagicMock(spec=Session)
     response = client.post(
         "/api/v1/fraud/rules",
         json={

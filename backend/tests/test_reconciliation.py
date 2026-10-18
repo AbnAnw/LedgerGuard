@@ -325,6 +325,7 @@ def test_analyst_can_queue_run_and_exact_retry_returns_http_200(
 
 def test_auditor_cannot_create_reconciliation_run(client: TestClient) -> None:
     app.dependency_overrides[get_current_principal] = lambda: principal("auditor")
+    app.dependency_overrides[get_db] = lambda: MagicMock(spec=Session)
 
     response = client.post(
         "/api/v1/reconciliation/runs",

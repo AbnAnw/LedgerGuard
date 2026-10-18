@@ -573,6 +573,7 @@ def test_csv_endpoint_queues_raw_content_for_worker_parsing(
 
 def test_auditor_cannot_ingest_transactions(client: TestClient) -> None:
     app.dependency_overrides[get_current_principal] = lambda: make_principal("auditor")
+    app.dependency_overrides[get_db] = lambda: MagicMock(spec=Session)
 
     response = client.post(
         "/api/v1/ingestion/transactions/json",

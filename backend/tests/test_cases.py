@@ -233,4 +233,5 @@ def test_auditor_can_read_cases_but_cannot_create_or_change_them(client: TestCli
 
 def test_unknown_role_is_denied_case_reads(client: TestClient) -> None:
     app.dependency_overrides[get_current_principal] = lambda: principal("unknown")
+    app.dependency_overrides[get_db] = lambda: MagicMock(spec=Session)
     assert client.get(f"/api/v1/cases/{UUID(int=1)}").status_code == 403
