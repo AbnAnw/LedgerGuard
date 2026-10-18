@@ -39,6 +39,8 @@ services:
       APP_NAME: LedgerGuard
       PYTHONPATH: /app/src
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_STRUCTURED_LOG_EXPORTER: ${OTEL_STRUCTURED_LOG_EXPORTER:-true}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ledgerguard}:${POSTGRES_PASSWORD:-ledgerguard-local-only}@postgres:5432/${POSTGRES_DB:-ledgerguard}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -122,6 +124,52 @@ services:
       api:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
 volumes:
   postgres-data:
   redis-data:
+  prometheus-data:
+  grafana-data:

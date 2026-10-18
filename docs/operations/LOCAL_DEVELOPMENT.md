@@ -17,7 +17,13 @@ No `.env` file is required for the synthetic local defaults. To customise ports 
 docker compose up --build
 ```
 
-The API container waits for PostgreSQL and Redis, applies the Alembic migration, then starts FastAPI. The worker starts after the API becomes healthy. Host ports bind only to the loopback interface. The frontend is available at `http://localhost:5173`, OpenAPI at `http://localhost:8000/docs`, liveness at `http://localhost:8000/health/live`, and dependency readiness at `http://localhost:8000/health/ready`.
+The API container waits for PostgreSQL and Redis, applies the Alembic migration, then starts
+FastAPI. The worker starts after the API becomes healthy. Prometheus then scrapes the private
+`/metrics` endpoint and Grafana provisions the `LedgerGuard Operations` dashboard. Host ports bind
+only to the loopback interface. The frontend is available at `http://localhost:5173`, OpenAPI at
+`http://localhost:8000/docs`, Prometheus at `http://localhost:9090`, Grafana at
+`http://localhost:3000`, liveness at `http://localhost:8000/health/live`, and dependency readiness
+at `http://localhost:8000/health/ready`.
 
 Seed the three roles, a synthetic demonstration account, and three synthetic users after the stack is healthy:
 
@@ -202,6 +208,29 @@ Schema changes must be represented by a new Alembic revision. Never modify a mig
 ## Health semantics
 
 - `/health/live` proves only that the API process is serving requests.
-- `/health/ready` probes PostgreSQL and Redis and returns HTTP 503 if either dependency is unavailable.
-- Health failures expose only `up`/`down` state; driver messages and credentials are not returned.
+- `/health/ready` probes PostgreSQL and Redis, records each bounded probe's `latency_ms`, and returns HTTP 503 if either dependency is unavailable.
+- Health failures expose only `up`/`down` state and timing; driver messages, hosts, and credentials are not returned.
 - The Celery container health check uses a targeted worker ping.
+
+## Observability
+
+LedgerGuard emits one redacted JSON object per application event. Provide a UUID in
+`X-Request-ID` when you need to correlate a client request; the API returns the effective request
+ID on every response. Durable jobs also carry their job ID, stable correlation ID, and W3C trace
+context into Celery. Search both services without writing logs to a file:
+
+```powershell
+docker compose logs --since 10m api worker | Select-String '<job-or-request-id>'
+```
+
+Prometheus scrapes `http://api:8000/metrics` inside the Compose network. The host endpoint is
+`http://localhost:8000/metrics`; it is intended for private scraping and must not be exposed by a
+public ingress. The Grafana dashboard is provisioned at
+`http://localhost:3000/d/ledgerguard-operations` with local anonymous Viewer access. This profile
+is loopback-only; hosted authentication is a Day 19 deployment responsibility.
+
+The dashboard covers request rate, 4xx/5xx ratio, p95 latency, queue depth, persisted worker
+failures, job states, ingestion outcomes, and reconciliation outcomes. Processing signals are
+database-authoritative gauges so they remain coherent across API and worker restarts. See the
+[observability contract](../architecture/OBSERVABILITY.md) for label limits, trace propagation,
+the synthetic failure drill, and privacy rules.

@@ -26,7 +26,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 12 | Audit logging | **Complete** |
 | Day 13 | Reporting and export | **Complete** |
 | Day 14 | Comprehensive automated testing | **Complete** |
-| Day 15 | Observability | **Not started** |
+| Day 15 | Observability | **Complete** |
 | Day 16 | Security and privacy review | **Not started** |
 | Day 17 | Performance and resilience | **Not started** |
 | Day 18 | Evidence-grounded AI explanation | **Not started** |
@@ -193,7 +193,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 15 — Observability
 
-**Status: Not started**
+**Status: Complete**
 
 - Add structured redacted logs, request IDs, job IDs, metrics, traces, and dependency-aware health checks.
 - Track API latency/error rate, queue depth, worker failures, ingestion throughput, and reconciliation throughput.

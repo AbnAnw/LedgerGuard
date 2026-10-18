@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     app_name: str = "LedgerGuard"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_structured_log_exporter: bool = True
     api_host: str = "0.0.0.0"
     api_port: int = Field(default=8000, ge=1, le=65535)
     database_url: str = (
@@ -55,6 +57,15 @@ class Settings(BaseSettings):
         if not value.startswith(("redis://", "rediss://")):
             raise ValueError("Redis URLs must use redis:// or rediss://")
         return value
+
+    @field_validator("otel_exporter_otlp_endpoint", mode="before")
+    @classmethod
+    def validate_otel_endpoint(cls, value: object) -> object:
+        if value in (None, ""):
+            return None
+        if not isinstance(value, str) or not value.startswith(("http://", "https://")):
+            raise ValueError("OTEL_EXPORTER_OTLP_ENDPOINT must use http:// or https://")
+        return value.rstrip("/")
 
     @model_validator(mode="after")
     def reject_development_secrets_in_production(self) -> "Settings":

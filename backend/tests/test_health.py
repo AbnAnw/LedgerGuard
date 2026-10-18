@@ -28,7 +28,10 @@ def test_liveness_returns_version_and_utc_timestamp(client: TestClient) -> None:
 def test_readiness_succeeds_when_dependencies_are_up(client: TestClient) -> None:
     ready: ReadinessState = {
         "status": "ready",
-        "dependencies": {"database": {"status": "up"}, "redis": {"status": "up"}},
+        "dependencies": {
+            "database": {"status": "up", "latency_ms": 1.25},
+            "redis": {"status": "up", "latency_ms": 0.5},
+        },
     }
     app.dependency_overrides[probe_dependencies] = lambda: ready
 
@@ -41,7 +44,10 @@ def test_readiness_succeeds_when_dependencies_are_up(client: TestClient) -> None
 def test_readiness_fails_closed_without_leaking_driver_errors(client: TestClient) -> None:
     unavailable: ReadinessState = {
         "status": "not_ready",
-        "dependencies": {"database": {"status": "down"}, "redis": {"status": "up"}},
+        "dependencies": {
+            "database": {"status": "down", "latency_ms": 2000.0},
+            "redis": {"status": "up", "latency_ms": 0.5},
+        },
     }
     app.dependency_overrides[probe_dependencies] = lambda: unavailable
 

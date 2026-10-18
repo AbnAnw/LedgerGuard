@@ -6,7 +6,11 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 14 is complete: the domain, API, database, worker, React, and assembled browser paths are covered by a documented risk-based test strategy. GitHub Actions now runs backend and frontend quality gates plus isolated PostgreSQL/Redis/Celery integration tests and Chromium journeys for administrators, operations analysts, and auditors.
+Day 15 is complete: API and worker operations now emit redacted JSON logs with request, job,
+correlation, and OpenTelemetry trace context. Prometheus scrapes API and durable PostgreSQL-backed
+processing metrics, Grafana provisions the local operations dashboard, and dependency readiness
+reports sanitized probe timing. A synthetic API-to-worker failure drill verified that one trace ID
+connects the accepted request to its persisted worker failure.
 
 ## Users and least privilege
 
@@ -32,7 +36,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [automated test strategy](docs/architecture/TEST_STRATEGY.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [automated test strategy](docs/architecture/TEST_STRATEGY.md), [observability contract](docs/architecture/OBSERVABILITY.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -59,7 +63,10 @@ With Docker Engine and Docker Compose v2 installed, start from a clean clone:
 docker compose up --build
 ```
 
-Open the interface at `http://localhost:5173` and API documentation at `http://localhost:8000/docs`. Seed reference roles, one synthetic account, and the three synthetic users with:
+Open the interface at `http://localhost:5173`, API documentation at
+`http://localhost:8000/docs`, Prometheus at `http://localhost:9090`, and the provisioned
+read-only Grafana dashboard at `http://localhost:3000`. Seed reference roles, one synthetic
+account, and the three synthetic users with:
 
 ```powershell
 docker compose exec api ledgerguard-seed
@@ -126,6 +133,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/architecture/AUDIT_LOGGING.md` — structured event vocabulary, evidence limits, append-only enforcement, and auditor timeline contract
 - `docs/architecture/REPORTING_AND_EXPORT.md` — UTC report scope, independent total verification, fixed CSV fields, and spreadsheet safety
 - `docs/architecture/TEST_STRATEGY.md` — risk matrix, test layers, role journeys, CI isolation, and acceptance gates
+- `docs/architecture/OBSERVABILITY.md` — log, correlation, metric, trace, health, dashboard, and failure-drill contracts
 - `docs/ui/ANALYST_DASHBOARD.md` — dashboard metrics, states, role behaviour, prioritisation, and acceptance matrix
 
 ## License and usage

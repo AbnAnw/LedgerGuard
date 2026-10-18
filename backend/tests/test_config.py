@@ -13,6 +13,7 @@ def test_default_settings_are_valid_for_local_development() -> None:
     assert settings.background_job_max_attempts == 3
     assert settings.background_job_soft_time_limit_seconds == 300
     assert settings.background_job_hard_time_limit_seconds == 330
+    assert settings.otel_exporter_otlp_endpoint is None
 
 
 def test_non_postgresql_database_is_rejected() -> None:
@@ -46,3 +47,13 @@ def test_background_job_hard_limit_must_exceed_soft_limit() -> None:
             background_job_hard_time_limit_seconds=300,
             _env_file=None,
         )
+
+
+def test_otel_endpoint_must_use_http_transport() -> None:
+    with pytest.raises(ValidationError, match="must use http"):
+        Settings(otel_exporter_otlp_endpoint="grpc://collector:4317", _env_file=None)
+
+    settings = Settings(
+        otel_exporter_otlp_endpoint="https://collector.example.invalid:4318/", _env_file=None
+    )
+    assert settings.otel_exporter_otlp_endpoint == "https://collector.example.invalid:4318"

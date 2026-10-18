@@ -29,6 +29,7 @@ from ledgerguard.models import (
     BackgroundJobStatus,
     User,
 )
+from ledgerguard.observability import current_request_id, inject_trace_context, log_event
 
 TERMINAL_JOB_STATUSES = frozenset(
     {
@@ -162,18 +163,31 @@ def _create_or_replay_job(
             metadata={"schema_version": "audit-v1", "kind": existing.kind.value},
         )
         db.commit()
+        log_event(
+            "job.replayed",
+            "Existing durable background job replayed.",
+            service="ledgerguard-api",
+            job_id=str(existing.id),
+            correlation_id=str(existing.correlation_id),
+            job_kind=existing.kind.value,
+            job_status=existing.status.value,
+        )
         return existing, True
 
     job_id = uuid4()
+    durable_payload = dict(payload)
+    trace_carrier = inject_trace_context()
+    if trace_carrier:
+        durable_payload["_telemetry"] = trace_carrier
     job = BackgroundJob(
         id=job_id,
         kind=kind,
         status=BackgroundJobStatus.QUEUED,
         deduplication_key=deduplication_key,
         request_sha256=request_sha256,
-        payload=payload,
+        payload=durable_payload,
         requested_by_user_id=principal.user_id,
-        correlation_id=uuid4(),
+        correlation_id=current_request_id() or uuid4(),
         celery_task_id=str(job_id),
         progress_current=0,
         progress_total=max(progress_total, 1),
@@ -206,6 +220,15 @@ def _create_or_replay_job(
         return concurrent, True
 
     _publish_or_unavailable(job.id)
+    log_event(
+        "job.queued",
+        "Durable background job queued.",
+        service="ledgerguard-api",
+        job_id=str(job.id),
+        correlation_id=str(job.correlation_id),
+        job_kind=job.kind.value,
+        job_status=job.status.value,
+    )
     return job, False
 
 
@@ -309,6 +332,22 @@ def _worker_principal(db: Session, job: BackgroundJob) -> AuthPrincipal:
     )
 
 
+def get_job_observability_context(job_id: UUID) -> tuple[UUID, str, dict[str, str]]:
+    """Return safe durable context needed to connect a worker span to its API origin."""
+
+    with SessionLocal() as db:
+        job = db.get(BackgroundJob, job_id)
+        if job is None:
+            raise RuntimeError("Background job does not exist")
+        raw_carrier = job.payload.get("_telemetry", {})
+        carrier = {
+            str(key): str(value)
+            for key, value in raw_carrier.items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+        return job.correlation_id, job.kind.value, carrier
+
+
 def _claim_job(db: Session, job_id: UUID) -> tuple[BackgroundJob, dict[str, Any] | None]:
     job = db.scalar(select(BackgroundJob).where(BackgroundJob.id == job_id).with_for_update())
     if job is None:
@@ -409,6 +448,15 @@ def _finish_job(
     )
     db.commit()
     db.refresh(job)
+    log_event(
+        "job.succeeded",
+        "Background job completed successfully.",
+        service="ledgerguard-worker",
+        job_id=str(job.id),
+        correlation_id=str(job.correlation_id),
+        job_kind=job.kind.value,
+        job_status=job.status.value,
+    )
     return _job_response(job)
 
 
@@ -439,6 +487,17 @@ def mark_job_failed(job_id: UUID, code: str, detail: str) -> BackgroundJobRespon
         )
         db.commit()
         db.refresh(job)
+        log_event(
+            "job.failed",
+            "Background job failed with persisted evidence.",
+            level=40,
+            service="ledgerguard-worker",
+            job_id=str(job.id),
+            correlation_id=str(job.correlation_id),
+            job_kind=job.kind.value,
+            job_status=job.status.value,
+            failure_code=job.failure_code,
+        )
         return _job_response(job)
 
 
@@ -455,12 +514,34 @@ def mark_job_for_retry(job_id: UUID) -> bool:
             job.finished_at = datetime.now(UTC)
             job.payload = {}
             db.commit()
+            log_event(
+                "job.failed",
+                "Background job exhausted bounded retries.",
+                level=40,
+                service="ledgerguard-worker",
+                job_id=str(job.id),
+                correlation_id=str(job.correlation_id),
+                job_kind=job.kind.value,
+                job_status=job.status.value,
+                failure_code=job.failure_code,
+            )
             return False
         job.status = BackgroundJobStatus.QUEUED
         job.failure_code = "RETRYABLE_DEPENDENCY_ERROR"
         job.failure_detail = "A transient dependency failure will be retried."
         job.status_message = "Waiting for bounded retry."
         db.commit()
+        log_event(
+            "job.retry.scheduled",
+            "Background job scheduled for bounded retry.",
+            level=30,
+            service="ledgerguard-worker",
+            job_id=str(job.id),
+            correlation_id=str(job.correlation_id),
+            job_kind=job.kind.value,
+            job_status=job.status.value,
+            attempt_count=job.attempt_count,
+        )
         return True
 
 

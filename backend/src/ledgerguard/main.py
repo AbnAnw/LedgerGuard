@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -17,16 +17,20 @@ from ledgerguard.fraud import router as fraud_router
 from ledgerguard.health import ReadinessState, probe_dependencies
 from ledgerguard.ingestion import router as ingestion_router
 from ledgerguard.jobs import router as jobs_router
+from ledgerguard.metrics import render_metrics
+from ledgerguard.observability import ObservabilityMiddleware, configure_observability
 from ledgerguard.reconciliation import router as reconciliation_router
 from ledgerguard.reports import router as reports_router
 
 settings = get_settings()
+configure_observability("ledgerguard-api")
 
 app = FastAPI(
     title=settings.app_name,
     version=__version__,
     description="Transaction reconciliation and fraud-monitoring API",
 )
+app.add_middleware(ObservabilityMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -81,3 +85,10 @@ def metadata() -> dict[str, str]:
     """Expose non-sensitive build metadata to the frontend."""
 
     return {"name": settings.app_name, "version": __version__, "environment": settings.app_env}
+
+
+@app.get("/metrics", include_in_schema=False)
+def prometheus_metrics() -> Response:
+    """Expose low-cardinality operational metrics for private Prometheus scraping."""
+
+    return Response(render_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
