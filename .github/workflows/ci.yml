@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12.8"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.13.1"
           cache: npm
@@ -75,7 +75,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.13.1"
           cache: npm
@@ -94,7 +94,7 @@ jobs:
       LEDGERGUARD_RUN_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.13.1"
           cache: npm
