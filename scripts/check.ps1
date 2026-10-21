@@ -7,6 +7,11 @@ $backendRoot = Join-Path $repoRoot 'backend'
 $frontendRoot = Join-Path $repoRoot 'frontend'
 $python = Join-Path $backendRoot '.venv/Scripts/python.exe'
 $frontendTemp = Join-Path $repoRoot 'tmp/frontend-check'
+$pipAuditCache = Join-Path $repoRoot 'tmp/pip-audit-cache'
+
+& (Join-Path $PSScriptRoot 'scan-secrets.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Secret scan failed.' }
+New-Item -ItemType Directory -Path $pipAuditCache -Force | Out-Null
 
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw 'Backend virtual environment is missing. Run ./scripts/bootstrap.ps1 first.'
@@ -22,6 +27,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Backend type check failed.' }
     & $python -m pytest --cov=ledgerguard --cov-report=term
     if ($LASTEXITCODE -ne 0) { throw 'Backend tests failed.' }
+    & $python -m pip_audit --local --skip-editable --cache-dir $pipAuditCache
+    if ($LASTEXITCODE -ne 0) { throw 'Python dependency audit failed.' }
     & (Join-Path $backendRoot '.venv/Scripts/alembic.exe') upgrade head --sql | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Alembic offline migration check failed.' }
 } finally {
@@ -43,6 +50,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed.' }
     npm run build
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
+    npm audit --audit-level=high
+    if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency audit failed.' }
 } finally {
     Pop-Location
     $env:TEMP = $previousTemp

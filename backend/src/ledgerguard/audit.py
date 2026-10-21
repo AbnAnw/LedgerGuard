@@ -88,7 +88,7 @@ def _utc_filter(value: datetime | None, name: str) -> datetime | None:
         return None
     if value.tzinfo is None or value.utcoffset() is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{name} must include a UTC offset",
         )
     return value.astimezone(UTC)
@@ -116,7 +116,7 @@ def list_audit_events(
     ended_at = _utc_filter(occurred_to, "occurred_to")
     if started_at is not None and ended_at is not None and started_at >= ended_at:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="occurred_from must be earlier than occurred_to",
         )
     append_audit_event(

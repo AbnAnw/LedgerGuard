@@ -12,14 +12,15 @@ dependencies = [
   "alembic==1.14.0",
   "argon2-cffi==23.1.0",
   "celery[redis]==5.4.0",
-  "fastapi==0.115.6",
+  "certifi==2026.10.19",
+  "fastapi==0.156.8",
   "opentelemetry-api==1.45.1",
   "opentelemetry-exporter-otlp-proto-http==1.45.1",
   "opentelemetry-sdk==1.45.1",
   "prometheus-client==0.26.0",
   "psycopg[binary]==3.2.3",
   "pydantic-settings==2.7.1",
-  "python-multipart==0.0.20",
+  "python-multipart==0.0.32",
   "redis==5.2.1",
   "sqlalchemy==2.0.36",
   "uvicorn[standard]==0.34.0",
@@ -29,7 +30,8 @@ dependencies = [
 dev = [
   "httpx==0.28.1",
   "mypy==1.14.1",
-  "pytest==8.3.4",
+  "pip-audit==2.10.1",
+  "pytest==9.1.1",
   "pytest-cov==6.0.0",
   "ruff==0.8.4",
 ]
@@ -38,6 +40,7 @@ dev = [
 ledgerguard-seed = "ledgerguard.cli:seed"
 ledgerguard-seed-reconciliation = "ledgerguard.cli:seed_reconciliation"
 ledgerguard-seed-fraud = "ledgerguard.cli:seed_fraud"
+ledgerguard-provision-runtime = "ledgerguard.database_admin:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ledgerguard"]

@@ -400,7 +400,9 @@ Large time-ordered tables (`audit_events`, and later possibly transactions/settl
 
 ## Retention assumptions
 
-These are design assumptions for a synthetic portfolio system, not claims of regulatory compliance. Day 16 will threat-model and ratify them before any deletion automation is implemented.
+These periods are the Day 16-approved baseline for this synthetic portfolio system, not claims of
+regulatory compliance. Any deploying organization must replace them through legal and policy
+review before non-synthetic use. The threat model retains the no-automation gate below.
 
 | Data | Assumed minimum | Behaviour |
 | --- | ---: | --- |

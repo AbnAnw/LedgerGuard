@@ -66,6 +66,39 @@ def test_json_formatter_emits_utc_json_and_recursively_redacts_secrets() -> None
     assert "should-not-appear" not in json.dumps(payload)
 
 
+def test_json_formatter_redacts_sensitive_keys_and_canaries_inside_strings() -> None:
+    record = logging.LogRecord(
+        "ledgerguard.telemetry",
+        logging.ERROR,
+        __file__,
+        1,
+        (
+            "contact real.person@example.com with Bearer raw-token-value or "
+            "postgresql://runtime:database-password@postgres/ledgerguard"
+        ),
+        (),
+        None,
+    )
+    record.structured_fields = {
+        "source_record_id": "customer-123",
+        "instrument_fingerprint": "instrument-canary",
+        "safe_code": "JOB_INPUT_REJECTED",
+    }
+
+    rendered = JsonFormatter().format(record)
+    payload = json.loads(rendered)
+
+    for canary in (
+        "real.person@example.com",
+        "raw-token-value",
+        "database-password",
+        "customer-123",
+        "instrument-canary",
+    ):
+        assert canary not in rendered
+    assert payload["safe_code"] == "JOB_INPUT_REJECTED"
+
+
 def test_api_echoes_valid_request_id_and_replaces_invalid_input() -> None:
     request_id = str(uuid4())
     with TestClient(app) as client:

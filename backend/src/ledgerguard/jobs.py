@@ -254,7 +254,7 @@ def enqueue_ingestion_job(
     )
     if account is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "code": "ACCOUNT_NOT_FOUND",
                 "message": "No active source account matches the batch metadata.",

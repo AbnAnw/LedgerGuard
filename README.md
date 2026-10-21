@@ -6,11 +6,11 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 15 is complete: API and worker operations now emit redacted JSON logs with request, job,
-correlation, and OpenTelemetry trace context. Prometheus scrapes API and durable PostgreSQL-backed
-processing metrics, Grafana provisions the local operations dashboard, and dependency readiness
-reports sanitized probe timing. A synthetic API-to-worker failure drill verified that one trace ID
-connects the accepted request to its persisted worker failure.
+Day 16 is complete: the security review now documents trust boundaries, threats, retention,
+repairs, and residual risks. The API enforces host, body-size, secure-header, synthetic-source, and
+Redis-backed request-rate controls; logs receive wider key/value redaction; and Compose separates
+the schema-owning migration identity from the non-owner API/worker database role. CI now performs
+Python and npm dependency audits plus a tracked-file credential-pattern scan.
 
 ## Users and least privilege
 
@@ -36,7 +36,7 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
-The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [automated test strategy](docs/architecture/TEST_STRATEGY.md), [observability contract](docs/architecture/OBSERVABILITY.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [security and privacy review](docs/security/SECURITY_AND_PRIVACY.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [automated test strategy](docs/architecture/TEST_STRATEGY.md), [observability contract](docs/architecture/OBSERVABILITY.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
 
 ## Repository map
 
@@ -125,6 +125,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/architecture/ERD.md` — transaction-to-case relationship diagram
 - `docs/decisions/` — accepted decisions for money, identifiers, audit history, and checked lifecycle values
 - `docs/operations/LOCAL_DEVELOPMENT.md` — current development environment and safety rules
+- `docs/security/SECURITY_AND_PRIVACY.md` — threat model, repaired findings, retention, and residual risks
 - `docs/api/TRANSACTION_INGESTION_V1.md` — versioned JSON/CSV ingestion contract and rejection catalogue
 - `docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md` — retry, duplicate, conflict, fingerprint, and quality-summary semantics
 - `docs/api/RECONCILIATION_V1.md` — deterministic matching, evidence, replay, and permission contract

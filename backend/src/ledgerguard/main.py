@@ -21,6 +21,7 @@ from ledgerguard.metrics import render_metrics
 from ledgerguard.observability import ObservabilityMiddleware, configure_observability
 from ledgerguard.reconciliation import router as reconciliation_router
 from ledgerguard.reports import router as reports_router
+from ledgerguard.security import SecurityMiddleware
 
 settings = get_settings()
 configure_observability("ledgerguard-api")
@@ -29,8 +30,10 @@ app = FastAPI(
     title=settings.app_name,
     version=__version__,
     description="Transaction reconciliation and fraud-monitoring API",
+    docs_url=None if settings.app_env == "production" else "/docs",
+    redoc_url=None if settings.app_env == "production" else "/redoc",
+    openapi_url=None if settings.app_env == "production" else "/openapi.json",
 )
-app.add_middleware(ObservabilityMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -38,6 +41,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
 )
+app.add_middleware(SecurityMiddleware, settings=settings)
+app.add_middleware(ObservabilityMiddleware)
 app.include_router(auth_router)
 app.include_router(access_router)
 app.include_router(ingestion_router)

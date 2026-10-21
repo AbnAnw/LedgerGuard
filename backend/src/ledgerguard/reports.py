@@ -156,7 +156,7 @@ def _window(report_date: date) -> tuple[datetime, datetime]:
 def _normalise_cutoff(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="cutoff_at must include a UTC offset",
         )
     return value.astimezone(UTC)

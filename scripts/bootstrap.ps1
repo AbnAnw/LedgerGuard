@@ -18,6 +18,8 @@ if ($null -eq $python) {
 }
 
 $venvPython = Join-Path $backendRoot '.venv/Scripts/python.exe'
+& $venvPython -m pip install --disable-pip-version-check --upgrade pip==26.2.2
+if ($LASTEXITCODE -ne 0) { throw 'Pinned pip installation failed.' }
 & $venvPython -m pip install --disable-pip-version-check -e "$backendRoot[dev]"
 if ($LASTEXITCODE -ne 0) { throw 'Backend dependency installation failed.' }
 

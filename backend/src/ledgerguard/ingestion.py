@@ -46,6 +46,7 @@ from ledgerguard.models import (
     MoneyDirection,
     TransactionStatus,
 )
+from ledgerguard.security import enforce_synthetic_source
 
 SCHEMA_VERSION = "1.0"
 SUPPORTED_CURRENCIES = frozenset({"AUD", "EUR", "GBP", "MVR", "MYR", "SGD", "USD"})
@@ -366,7 +367,7 @@ def parse_csv_records(content: bytes) -> list[dict[str, Any]]:
         text = content.decode("utf-8-sig", errors="strict")
     except UnicodeDecodeError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": "INVALID_CSV_ENCODING", "message": "CSV must use UTF-8 encoding."},
         ) from error
 
@@ -375,7 +376,7 @@ def parse_csv_records(content: bytes) -> list[dict[str, Any]]:
     missing = sorted(REQUIRED_CSV_FIELDS - headers)
     if missing:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "code": "MISSING_CSV_COLUMNS",
                 "message": "CSV is missing required columns.",
@@ -391,12 +392,12 @@ def parse_csv_records(content: bytes) -> list[dict[str, Any]]:
         records.append(record)
     if not records:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": "EMPTY_BATCH", "message": "CSV must contain at least one record."},
         )
     if len(records) > MAX_BATCH_RECORDS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": "BATCH_TOO_LARGE", "message": "Batch exceeds 10,000 records."},
         )
     return records
@@ -432,7 +433,7 @@ def ingest_transactions(
     )
     if account is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "code": "ACCOUNT_NOT_FOUND",
                 "message": "No active source account matches the batch metadata.",
@@ -672,7 +673,9 @@ def ingest_json_transactions(
     ],
     principal: Annotated[AuthPrincipal, Depends(require_permissions(Permission.INGESTION_WRITE))],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> BackgroundJobResponse:
+    enforce_synthetic_source(request.source_system, settings)
     result, replayed = enqueue_ingestion_job(
         db,
         source_system=request.source_system,
@@ -709,10 +712,11 @@ async def ingest_csv_transactions(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> BackgroundJobResponse:
+    enforce_synthetic_source(source_system, settings)
     content = await file.read(settings.ingestion_max_upload_bytes + 1)
     if len(content) > settings.ingestion_max_upload_bytes:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail={"code": "UPLOAD_TOO_LARGE", "message": "CSV exceeds the configured limit."},
         )
     result, replayed = enqueue_ingestion_job(

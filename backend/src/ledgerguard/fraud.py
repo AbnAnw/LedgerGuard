@@ -510,7 +510,7 @@ def create_rule(
         parameters = normalize_rule_parameters(request.rule_type, request.parameters)
     except ValueError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
         ) from error
     rule = FraudRule(
         code=request.code,
@@ -586,7 +586,7 @@ def create_rule_version(
         parameters = normalize_rule_parameters(request.rule_type, request.parameters)
     except ValueError as error:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
         ) from error
     latest = db.scalar(
         select(FraudRuleVersion.version_number)

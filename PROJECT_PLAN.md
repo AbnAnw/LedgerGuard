@@ -27,7 +27,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 13 | Reporting and export | **Complete** |
 | Day 14 | Comprehensive automated testing | **Complete** |
 | Day 15 | Observability | **Complete** |
-| Day 16 | Security and privacy review | **Not started** |
+| Day 16 | Security and privacy review | **Complete** |
 | Day 17 | Performance and resilience | **Not started** |
 | Day 18 | Evidence-grounded AI explanation | **Not started** |
 | Day 19 | Deployment preparation | **Not started** |
@@ -204,7 +204,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 16 — Security and privacy review
 
-**Status: Not started**
+**Status: Complete**
 
 - Create a threat model for authentication, privilege escalation, malicious uploads, injection, excessive resource use, secret exposure, and audit tampering.
 - Add rate limits, upload limits, secure headers, dependency/secret scanning, and log redaction.

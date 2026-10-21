@@ -11,6 +11,7 @@ def test_compose_declares_required_services_and_health_checks() -> None:
     assert set(services) == {
         "postgres",
         "redis",
+        "migrate",
         "api",
         "worker",
         "frontend",
@@ -21,6 +22,7 @@ def test_compose_declares_required_services_and_health_checks() -> None:
         assert "healthcheck" in services[service_name]
 
     assert services["api"]["depends_on"]["postgres"]["condition"] == "service_healthy"
+    assert services["api"]["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
     assert services["worker"]["depends_on"]["api"]["condition"] == "service_healthy"
     assert services["prometheus"]["depends_on"]["api"]["condition"] == "service_healthy"
     assert services["grafana"]["depends_on"]["prometheus"]["condition"] == "service_healthy"
@@ -51,3 +53,17 @@ def test_observability_services_use_provisioned_loopback_only_configuration() ->
 
     dashboard = root / "infra" / "observability" / "grafana" / "dashboards"
     assert (dashboard / "ledgerguard-operations.json").is_file()
+
+
+def test_compose_separates_migration_and_runtime_database_identities() -> None:
+    compose_path = Path(__file__).parents[2] / "docker-compose.yml"
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+    services = compose["services"]
+
+    assert "${POSTGRES_USER:-ledgerguard}" in services["migrate"]["environment"]["DATABASE_URL"]
+    assert (
+        "${DATABASE_RUNTIME_USER:-ledgerguard_app}"
+        in services["api"]["environment"]["DATABASE_URL"]
+    )
+    assert services["migrate"]["command"].endswith('ledgerguard-provision-runtime"')
+    assert services["worker"]["environment"] == services["api"]["environment"]

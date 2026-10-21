@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 import redis
 from sqlalchemy import select, text
+from sqlalchemy.exc import ProgrammingError
 
 from ledgerguard.config import get_settings
 from ledgerguard.db import SessionLocal, engine
@@ -122,6 +123,32 @@ def test_redis_broker_is_reachable() -> None:
         assert client.ping() is True
     finally:
         client.close()
+
+
+def test_runtime_database_role_is_non_owner_and_audit_append_only() -> None:
+    with engine.connect() as connection:
+        role_name = connection.scalar(text("SELECT current_user"))
+        can_create = connection.scalar(
+            text("SELECT has_schema_privilege(current_user, 'public', 'CREATE')")
+        )
+        can_insert_audit = connection.scalar(
+            text("SELECT has_table_privilege(current_user, 'audit_events', 'INSERT')")
+        )
+        can_update_audit = connection.scalar(
+            text("SELECT has_table_privilege(current_user, 'audit_events', 'UPDATE')")
+        )
+        can_delete_audit = connection.scalar(
+            text("SELECT has_table_privilege(current_user, 'audit_events', 'DELETE')")
+        )
+
+    assert role_name == "ledgerguard_app"
+    assert can_create is False
+    assert can_insert_audit is True
+    assert can_update_audit is False
+    assert can_delete_audit is False
+
+    with engine.connect() as connection, pytest.raises(ProgrammingError):
+        connection.execute(text("CREATE TABLE runtime_privilege_escape (id integer)"))
 
 
 def test_celery_worker_responds_to_health_probe() -> None:

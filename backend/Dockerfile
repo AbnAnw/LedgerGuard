@@ -5,6 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 RUN python -m venv /opt/venv
+RUN pip install --no-cache-dir pip==26.2.2
 WORKDIR /app
 
 COPY pyproject.toml README.md ./

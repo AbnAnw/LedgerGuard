@@ -299,7 +299,7 @@ def _valid_owner(db: Session, owner_id: UUID) -> User:
     )
     if owner is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Owner must be an active administrator or operations analyst",
         )
     return owner
@@ -529,7 +529,7 @@ def list_cases(
 ) -> list[CaseSummaryResponse]:
     if unassigned and owner_user_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="owner_user_id and unassigned cannot be combined",
         )
     alert_count = sa.func.count(CaseAlert.alert_id).label("alert_count")

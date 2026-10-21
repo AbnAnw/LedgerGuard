@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -37,10 +38,31 @@ _SENSITIVE_KEY_PARTS = (
     "authorization",
     "cookie",
     "credential",
+    "database_url",
+    "dsn",
+    "email",
+    "instrument",
     "password",
+    "payload",
+    "redis_url",
     "secret",
+    "source_record",
     "token",
 )
+_SENSITIVE_TEXT_PATTERNS = (
+    re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]+"),
+    re.compile(r"(?i)\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}\b"),
+    re.compile(r"(?i)([a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@"),
+    re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b"),
+)
+
+
+def _redact_text(value: str) -> str:
+    sanitized = value
+    for index, pattern in enumerate(_SENSITIVE_TEXT_PATTERNS):
+        replacement = r"\1[REDACTED]@" if index == 2 else "[REDACTED]"
+        sanitized = pattern.sub(replacement, sanitized)
+    return sanitized
 
 
 def _json_safe(value: object) -> object:
@@ -68,6 +90,8 @@ def redact(value: object, *, key: str = "") -> object:
         return {str(item_key): redact(item, key=str(item_key)) for item_key, item in value.items()}
     if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return [redact(item) for item in value]
+    if isinstance(value, str):
+        return _redact_text(value)
     return _json_safe(value)
 
 

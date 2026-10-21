@@ -41,7 +41,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_STRUCTURED_LOG_EXPORTER: ${OTEL_STRUCTURED_LOG_EXPORTER:-true}
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ledgerguard}:${POSTGRES_PASSWORD:-ledgerguard-local-only}@postgres:5432/${POSTGRES_DB:-ledgerguard}
+      DATABASE_URL: postgresql+psycopg://${DATABASE_RUNTIME_USER:-ledgerguard_app}:${DATABASE_RUNTIME_PASSWORD:-ledgerguard-runtime-local-only}@postgres:5432/${POSTGRES_DB:-ledgerguard}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -54,11 +54,16 @@ services:
       LOGIN_LOCK_MINUTES: ${LOGIN_LOCK_MINUTES:-15}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-DemoOnly!ChangeMe123456}
       INGESTION_MAX_UPLOAD_BYTES: ${INGESTION_MAX_UPLOAD_BYTES:-2000000}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-3000000}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_REQUESTS_PER_WINDOW: ${RATE_LIMIT_REQUESTS_PER_WINDOW:-120}
+      RATE_LIMIT_LOGIN_REQUESTS_PER_WINDOW: ${RATE_LIMIT_LOGIN_REQUESTS_PER_WINDOW:-10}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      SYNTHETIC_DATA_ONLY: ${SYNTHETIC_DATA_ONLY:-true}
       DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-UTC}
       CORS_ORIGINS: '["http://localhost:${FRONTEND_PORT:-5173}"]'
-    command: >-
-      sh -c "alembic upgrade head &&
-      uvicorn ledgerguard.main:app --host 0.0.0.0 --port 8000 --reload"
+      ALLOWED_HOSTS: '["localhost","127.0.0.1","api"]'
+    command: uvicorn ledgerguard.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./backend/src:/app/src
       - ./backend/migrations:/app/migrations
@@ -69,6 +74,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -81,6 +88,22 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  migrate:
+    build:
+      context: ./backend
+      target: development
+    environment:
+      APP_ENV: development
+      PYTHONPATH: /app/src
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ledgerguard}:${POSTGRES_PASSWORD:-ledgerguard-local-only}@postgres:5432/${POSTGRES_DB:-ledgerguard}
+      DATABASE_RUNTIME_USER: ${DATABASE_RUNTIME_USER:-ledgerguard_app}
+      DATABASE_RUNTIME_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:-ledgerguard-runtime-local-only}
+    command: >-
+      sh -c "alembic upgrade head && ledgerguard-provision-runtime"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   worker:
     build:

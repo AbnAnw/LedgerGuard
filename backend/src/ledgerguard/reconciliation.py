@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ledgerguard.audit_service import append_audit_event
 from ledgerguard.auth import AuthPrincipal, Permission, require_permissions
+from ledgerguard.config import Settings, get_settings
 from ledgerguard.db import get_db
 from ledgerguard.jobs import BackgroundJobResponse, enqueue_reconciliation_job
 from ledgerguard.models import (
@@ -37,6 +38,7 @@ from ledgerguard.models import (
     SettlementStatus,
     TransactionStatus,
 )
+from ledgerguard.security import enforce_synthetic_source
 
 ALGORITHM_VERSION = "reconciliation-v1.0.0"
 ZERO = Decimal("0")
@@ -745,7 +747,9 @@ def create_reconciliation_run(
         AuthPrincipal, Depends(require_permissions(Permission.RECONCILIATION_WRITE))
     ],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> BackgroundJobResponse:
+    enforce_synthetic_source(request.source_system, settings)
     result, replayed = enqueue_reconciliation_job(
         db,
         request_payload=request.model_dump(mode="json"),

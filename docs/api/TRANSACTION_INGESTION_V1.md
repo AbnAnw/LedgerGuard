@@ -14,10 +14,10 @@ Both require `Authorization: Bearer <session token>` and `Idempotency-Key: <key>
 | Field | Rules |
 | --- | --- |
 | `schema_version` | Required; exactly `1.0` |
-| `source_system` | 1–80 characters; letters, digits, `.`, `_`, or `-` |
+| `source_system` | 1–80 characters; letters, digits, `.`, `_`, or `-`; must start with `synthetic-` while the repository's synthetic-only guard is enabled |
 | `source_account_id` | 1–160 characters; letters, digits, `.`, `_`, `:`, `/`, or `-`; must identify an active account under `source_system` |
 | `records` | JSON only; 1–10,000 objects |
-| `file` | CSV only; UTF-8, configured default maximum 2,000,000 bytes, and 1–10,000 data rows |
+| `file` | CSV only; UTF-8, configured default maximum 2,000,000 bytes, and 1–10,000 data rows; the multipart request also remains below the global body-size limit |
 
 The CSV endpoint receives the three metadata values as form fields. CSV requires the seven non-optional record headers; `instrument_fingerprint` is an optional column.
 

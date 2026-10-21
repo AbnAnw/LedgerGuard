@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 15 — Observability: Complete**
+**Day 16 — Security and privacy review: Complete**
 
 ## Completed days
 
@@ -21,10 +21,11 @@
 - **Day 13 (2026-10-16):** Added account/date-scoped daily reconciliation summaries and cutoff-bounded unresolved-case reports; independently verified exact decimal totals against separate PostgreSQL aggregates; implemented fixed-field CSV exports with spreadsheet-formula neutralization; audited report views/exports; and added loading, empty, failure, and export interface states for all supported roles.
 - **Day 14 (2026-10-19):** Published a risk-based automated test strategy; expanded exact-money, permission, reconciliation, fraud-boundary, case-concurrency, retry, database, and real-worker coverage; added Chromium journeys for all three roles; and configured GitHub Actions to run backend, frontend, integration, browser, migration, and production-build gates.
 - **Day 15 (2026-10-19):** Added recursively redacted JSON logs, UUID request correlation, durable job IDs/correlation IDs, W3C API-to-worker trace propagation, OpenTelemetry OTLP/local exporters, bounded-label Prometheus metrics, sanitized dependency timing, and a provisioned Grafana operations dashboard; verified an induced synthetic reconciliation failure from accepted HTTP request through persisted worker error using one trace ID.
+- **Day 16 (2026-10-21):** Published an asset- and trust-boundary threat model with owned residual risks and retention assumptions; added Redis-backed API/login rate limits, request and upload bounds, host validation, secure response headers, production configuration fail-closed checks, synthetic-source enforcement, wider log redaction, automated dependency and secret scanning, and a migration-only database owner that provisions a restricted runtime role with append-only audit privileges.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines a seven-service local platform: application services plus loopback-bound Prometheus and Grafana. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured ingestion/reconciliation/fraud/case evidence, durable background jobs, reinforcing constraints, immutable activated rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces least privilege. Redis transports job identifiers while PostgreSQL remains authoritative for financial, job, rule, alert, case, audit, report-source, and cross-process metric state. API middleware emits UUID request IDs, normalized-route latency/error metrics, structured redacted logs, and OpenTelemetry server spans. Durable payload envelopes carry W3C trace context without changing canonical request hashes; Celery continues the trace in a consumer span and emits job/correlation IDs plus safe terminal failure codes. Prometheus scrapes API-process counters and PostgreSQL-backed gauges; Grafana provisions a read-only local operations dashboard. The reporting and audit modules retain their independently verified evidence contracts. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit loading, empty, held-report, and export states. A three-job GitHub Actions pipeline separates backend/frontend gates from an isolated Compose integration/browser gate. Validated settings use safe local defaults and environment overrides; OTLP export is optional and cloud concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines an eight-service local topology: a one-shot migration/privilege-provisioning job, the application services, and loopback-bound Prometheus and Grafana. The owner credential exists only in the migration job; API and worker use a non-owner runtime role that cannot create schema objects and cannot update, delete, or truncate audit history. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured evidence, durable jobs, reinforcing constraints, immutable active rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces role permissions, explicit host/origin policy, body limits, synthetic-source requirements, Redis-backed fixed-window rate limits, secure headers, and production configuration invariants. Redis transports job identifiers and rate-limit counters while PostgreSQL remains authoritative for durable state. API and worker telemetry retains UUID correlation, W3C trace continuity, bounded metrics, and recursively redacted structured logs. Prometheus and Grafana provide the local operations view. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit state handling. A four-job GitHub Actions pipeline adds dependency and secret scanning ahead of the isolated Compose integration/browser gate. Cloud-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -43,7 +44,7 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Preserve reconciliation groups with separate transaction and settlement item tables so exact, partial, missing, unexplained, and duplicate-candidate outcomes share one evidence model.
 - Make active fraud rule versions immutable and permit only one active version per logical rule.
 - Give the runtime application role insert/read-only access to `audit_events`, reinforce append-only behaviour with a database trigger, and prohibit secrets or unrestricted payloads in audit metadata.
-- Treat the documented retention periods as portfolio assumptions pending Day 16 security/policy review; implement no automatic purge before legal-hold and evidence tests exist.
+- Ratify the documented retention periods as the synthetic portfolio baseline, while requiring a deploying organization to replace them with approved legal and contractual policy. Implement no automatic purge before legal-hold, referential-integrity, evidence, and backup-expiry tests exist.
 - Represent lifecycle values with checked `VARCHAR` columns rather than PostgreSQL enum types so application and migration changes remain explicit and portable; see ADR 0004.
 - Seed only idempotent roles, a clearly synthetic demonstration account, and three `.invalid` demonstration users. Refuse demonstration-user seeding in production.
 - Keep liveness independent of infrastructure and return HTTP 503 from readiness until both PostgreSQL and Redis respond.
@@ -89,6 +90,10 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Keep metric labels bounded to normalized routes, methods, status classes, job enums, outcome enums, and a controlled failure-code set. Never label metrics with users, accounts, jobs, correlations, source records, messages, or raw paths.
 - Read queue depth, worker failures, ingestion outcomes, and reconciliation outcomes from PostgreSQL at scrape time so separate API/worker processes and restarts do not produce contradictory process-local counters.
 - Bind Prometheus and Grafana to loopback for local development. Anonymous Grafana access is Viewer-only and belongs only to this local profile; hosted ingress and authentication remain a Day 19 responsibility.
+- Keep the PostgreSQL owner credential in the one-shot migration service only. Provision API and worker with a non-owner role that has schema usage, ordinary table DML, sequence access, and insert/read-only access to `audit_events`.
+- Enforce fixed-window limits atomically in Redis using HMAC-derived direct-client identifiers. Ignore untrusted forwarding headers; fail open with a redacted event in development/test but fail closed in production when the limiter store is unavailable.
+- Require explicit production hosts, HTTPS browser origins, TLS Redis URLs, a non-placeholder database password, enabled rate limiting, and synthetic-only data. Disable interactive API documentation in production.
+- Run secret scanning plus Python and npm dependency audits locally and in CI; Dependabot proposes weekly Python, npm, Actions, and Docker updates for review rather than changing dependencies silently.
 
 ## Commands required to run the system
 
@@ -120,6 +125,7 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-13.ps1
 ./scripts/validate-day-14.ps1
 ./scripts/validate-day-15.ps1
+./scripts/validate-day-16.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -150,6 +156,12 @@ npm run test:e2e
 
 ## Test and coverage results
 
+- Day 16 backend quality gates: Ruff formatting and linting passed across 50 source/test/migration files; strict mypy found no issues in 22 source files; Alembic rendered all nine revisions offline through `20261016_0009`.
+- Day 16 backend suite: 196 passed and 9 opt-in integration tests skipped in 8.85 seconds with one upstream FastAPI/Starlette test-client deprecation warning. Measured statement coverage was 76% overall (3,319 statements, 806 missed), 97% for configuration, 90% for observability, and 89% for security. These are observations, not security assurance claims or targets.
+- Day 16 dependency and secret gates: `pip-audit` found no known vulnerabilities after upgrading the affected pinned packages and packaging tool; `npm audit --audit-level=high` found 0 vulnerabilities; the repository scanner found no configured private-key or provider-token patterns across 157 tracked or unignored files.
+- Day 16 frontend regression gates: ESLint and TypeScript checking passed; the final run passed 21 Vitest tests across seven files in 8.61 seconds; the Vite production build transformed 22 modules and produced a 191.01 kB JavaScript bundle (57.32 kB gzip) and 16.17 kB CSS bundle (4.17 kB gzip).
+- Day 16 live platform verification: `docker compose up -d --build --wait` rebuilt the final images; the migration/provisioning job exited 0; PostgreSQL, Redis, API, worker, frontend, Prometheus, and Grafana reached healthy/running state; all three synthetic seeds completed; the unauthenticated API boundary returned HTTP 401 with `no-store`, `nosniff`, and `DENY` headers.
+- Day 16 live integration and browser verification: the final-image run passed all 9 PostgreSQL/Redis/Celery integration tests in 7.18 seconds, including denial of prohibited runtime-role database actions; all 3 Chromium administrator, analyst, and auditor journeys passed in 6.8 seconds.
 - Day 15 backend quality gates: Ruff formatting and linting passed across 46 source/test/migration files; strict mypy found no issues in 20 source files; Alembic rendered all nine revisions offline through `20261016_0009`.
 - Day 15 backend suite: 171 passed and 8 opt-in integration tests skipped in 6.77 seconds; the one warning is the already documented upstream Starlette/AnyIO alias deprecation. Measured statement coverage was 75% overall (3,066 statements, 764 missed), 93% for metrics, 89% for observability, and 57% for the worker. These figures are observations, not assurance claims or targets.
 - Day 15 focused observability/job regression suites: 29 tests passed initially; the final configuration/worker/observability/job suite passed 30 tests after correcting process service labeling and retaining bounded retry when durable trace context cannot be loaded. Coverage includes recursive redaction, UUID request echo/replacement, authoritative metric output, trace-parent continuation, OTLP configuration validation, worker delivery/retry settings, durable jobs, readiness shape, and Compose provisioning.
@@ -327,13 +339,13 @@ npm run test:e2e
 
 ## Known issues
 
-- MFA, password reset, external identity-provider integration, and authentication rate limiting are not implemented; rate limiting and the wider threat review are scheduled for Day 16.
+- MFA, self-service password reset, and external identity-provider integration are not implemented. Redis-backed login throttling reduces online guessing but is not a substitute for MFA, an edge WAF, or organization-wide identity controls.
 - Prometheus `/metrics` and anonymous Grafana Viewer access are loopback-bound local-development interfaces, not a production ingress policy. Day 19 must require authenticated/private routing and managed retention.
 - The default local trace exporter writes completed spans to structured logs. Set an internal OTLP HTTP collector endpoint for durable distributed-trace storage; no hosted collector was configured or claimed on Day 15.
 - Dashboard panels provide operational visibility but no evidence-based SLO thresholds or paging rules. Day 17 will measure performance before any latency/throughput target is claimed.
 - The unresolved-case report is intentionally a current-state queue bounded by case creation cutoff; it is not a historical status-as-of reconstruction. A historical snapshot would require replaying case status history and is outside Day 13 scope.
 - Fraud thresholds and scores are deterministic demonstration controls, not validated fraud policy, probability estimates, or claims of detection accuracy.
-- Retention periods are unratified design assumptions pending Day 16; the production queue choice remains a Day 19 decision.
+- Retention periods are ratified only as a synthetic portfolio baseline; a deploying organization must approve jurisdiction-specific retention, legal-hold, backup-expiry, and deletion procedures. The production queue choice remains a Day 19 decision.
 - Some cross-row invariants (for example, retaining one administrator and classification-specific reconciliation membership) require transactional service checks and concurrency tests in the relevant later feature days.
 - The pinned Starlette test client emits one upstream AnyIO deprecation warning. It does not fail the test suite.
 - Running-job cancellation is cooperative at defined safe checkpoints; work already inside an atomic financial commit is allowed to finish rather than being terminated mid-transaction.
@@ -346,15 +358,15 @@ npm run test:e2e
 
 ## Blockers
 
-None for Day 15. Automated unit, component, API, PostgreSQL, Redis, Celery, Chromium, container-build, production-build, metrics, trace, health, and dashboard verification completed using synthetic data.
+None for Day 16. Automated unit, component, API, PostgreSQL, Redis, Celery, Chromium, container-build, production-build, dependency, secret-pattern, configuration, security-header, privilege, and threat-model verification completed using synthetic data.
 
 ## Notion synchronization
 
-Day 15 Notion synchronization remains explicitly pending. A previous connector attempt rejected exporting project, test, and commit details without direct authorization for that payload and destination; this repository record remains authoritative until the user authorizes that external write.
+Day 16 Notion synchronization remains explicitly pending. The user has not directly authorized exporting this day's project, security, test, and commit details to a specific Notion destination; this repository record remains authoritative.
 
 ## Next day's objective
 
-Day 16 will create the threat model and privacy review; add rate limits, secure headers, dependency/secret scanning, and wider log-redaction controls; review database permissions and secret handling; and document retention, synthetic-data requirements, repaired findings, and residual risks.
+Day 17 will generate at least 10,000 synthetic transactions with known outcomes; measure throughput, p50/p95 latency, failure rate, and worker time under recorded conditions; test worker restart, duplicate delivery, partial failure, and database reconnection; then optimise one measured bottleneck and publish the before/after evidence honestly.
 
 ## Latest commit hash
 

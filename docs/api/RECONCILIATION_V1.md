@@ -9,6 +9,7 @@ hash needed to reproduce the decision.
 
 Day 9 runs this matching contract behind a durable Celery job. PostgreSQL remains authoritative
 for job and reconciliation evidence; Redis transports the job identifier.
+While `SYNTHETIC_DATA_ONLY=true`, `source_system` must begin with `synthetic-`.
 
 ## API contract
 

@@ -194,10 +194,29 @@ Schema changes must be represented by a new Alembic revision. Never modify a mig
 
 1. Replace local placeholders before any shared or production-like deployment; never reuse production secrets locally.
 2. Keep `.env` untracked. The committed `.gitignore` protects `.env` variants while allowing `.env.example`.
-3. Production mode rejects the documented development authentication secret.
-4. Production mode rejects the documented demonstration password, and the seed command refuses to create demonstration users.
-5. Use only generated synthetic data under `sample-data/`.
+3. Production mode rejects placeholder database/authentication secrets, plaintext Redis URLs,
+   HTTP CORS origins, local host names, disabled rate limiting, and disabled synthetic-only mode.
+4. Production mode rejects the documented demonstration password, disables interactive API docs,
+   and the seed command refuses to create demonstration users.
+5. Use only generated synthetic data under `sample-data/`; API source systems must use the
+   `synthetic-` prefix while `SYNTHETIC_DATA_ONLY=true`.
 6. Treat logs, exports, database dumps, and uploaded fixtures as untrusted local artifacts and do not commit them.
+7. Run `./scripts/scan-secrets.ps1` before commit; the complete check also runs Python and npm
+   vulnerability audits.
+
+## Security boundary
+
+Compose runs a one-shot `migrate` service with the schema-owner credential, then provisions
+`ledgerguard_app` for the API and worker. The runtime role cannot create schema objects and has
+only `SELECT`/`INSERT` on `audit_events`; the append-only trigger remains a second control. Existing
+local volumes are upgraded in place without deleting data.
+
+Rate limiting is enabled in Compose. The general bucket defaults to 120 requests per 60 seconds
+per directly connected address and login defaults to 10; forwarded-address headers are ignored.
+The API rejects bodies above 3 MB before parsing, while CSV bytes remain capped at 2 MB. Every API
+response receives secure headers and `Cache-Control: no-store`. See the
+[security and privacy review](../security/SECURITY_AND_PRIVACY.md) for the threat model, retention,
+test contract, and residual production risks.
 
 ## Time and money conventions
 
