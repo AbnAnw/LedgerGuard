@@ -28,7 +28,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 | Day 14 | Comprehensive automated testing | **Complete** |
 | Day 15 | Observability | **Complete** |
 | Day 16 | Security and privacy review | **Complete** |
-| Day 17 | Performance and resilience | **Not started** |
+| Day 17 | Performance and resilience | **Complete** |
 | Day 18 | Evidence-grounded AI explanation | **Not started** |
 | Day 19 | Deployment preparation | **Not started** |
 | Day 20 | Portfolio package | **Not started** |
@@ -215,7 +215,7 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 
 ### Day 17 — Performance and resilience
 
-**Status: Not started**
+**Status: Complete**
 
 - Generate at least 10,000 synthetic transactions with known reconciliation outcomes.
 - Measure throughput, p50/p95 latency, failure rate, and worker processing time with environment and method recorded.
@@ -223,6 +223,11 @@ Only one roadmap day advances per user command of `Next`. Day statuses are updat
 - Identify and optimise one measured bottleneck, then compare before and after.
 
 **Completion criterion:** reproducible measurements and resilience outcomes are published without invented claims.
+
+Completed with a deterministic 10,000-transaction fixture, a reproducible pure-engine benchmark
+and live-stack harness, measured API/worker results, real worker/database recovery drills,
+duplicate-delivery and transaction-rollback integration tests, and an indexed reconciliation
+candidate builder whose output is checked against the exhaustive reference algorithm.
 
 ### Day 18 — Evidence-grounded AI explanation
 

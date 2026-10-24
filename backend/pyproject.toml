@@ -41,6 +41,8 @@ ledgerguard-seed = "ledgerguard.cli:seed"
 ledgerguard-seed-reconciliation = "ledgerguard.cli:seed_reconciliation"
 ledgerguard-seed-fraud = "ledgerguard.cli:seed_fraud"
 ledgerguard-provision-runtime = "ledgerguard.database_admin:main"
+ledgerguard-benchmark = "ledgerguard.performance:main"
+ledgerguard-seed-performance = "ledgerguard.performance:seed_performance_account"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ledgerguard"]

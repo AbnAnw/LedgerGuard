@@ -2,7 +2,7 @@
 
 ## Current roadmap day
 
-**Day 16 — Security and privacy review: Complete**
+**Day 17 — Performance and resilience: Complete**
 
 ## Completed days
 
@@ -22,10 +22,11 @@
 - **Day 14 (2026-10-19):** Published a risk-based automated test strategy; expanded exact-money, permission, reconciliation, fraud-boundary, case-concurrency, retry, database, and real-worker coverage; added Chromium journeys for all three roles; and configured GitHub Actions to run backend, frontend, integration, browser, migration, and production-build gates.
 - **Day 15 (2026-10-19):** Added recursively redacted JSON logs, UUID request correlation, durable job IDs/correlation IDs, W3C API-to-worker trace propagation, OpenTelemetry OTLP/local exporters, bounded-label Prometheus metrics, sanitized dependency timing, and a provisioned Grafana operations dashboard; verified an induced synthetic reconciliation failure from accepted HTTP request through persisted worker error using one trace ID.
 - **Day 16 (2026-10-21):** Published an asset- and trust-boundary threat model with owned residual risks and retention assumptions; added Redis-backed API/login rate limits, request and upload bounds, host validation, secure response headers, production configuration fail-closed checks, synthetic-source enforcement, wider log redaction, automated dependency and secret scanning, and a migration-only database owner that provisions a restricted runtime role with append-only audit privileges.
+- **Day 17 (2026-10-25):** Added a deterministic 10,000-transaction workload and benchmark harness; measured API, worker, and reconciliation performance under recorded local conditions; replaced the 80-million-pair reconciliation candidate scan with a correctness-checked reference/currency index; exercised worker restart, duplicate delivery, atomic rollback, and database reconnection; and published reproducible results and limitations.
 
 ## Current architecture
 
-LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines an eight-service local topology: a one-shot migration/privilege-provisioning job, the application services, and loopback-bound Prometheus and Grafana. The owner credential exists only in the migration job; API and worker use a non-owner runtime role that cannot create schema objects and cannot update, delete, or truncate audit history. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured evidence, durable jobs, reinforcing constraints, immutable active rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces role permissions, explicit host/origin policy, body limits, synthetic-source requirements, Redis-backed fixed-window rate limits, secure headers, and production configuration invariants. Redis transports job identifiers and rate-limit counters while PostgreSQL remains authoritative for durable state. API and worker telemetry retains UUID correlation, W3C trace continuity, bounded metrics, and recursively redacted structured logs. Prometheus and Grafana provide the local operations view. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit state handling. A four-job GitHub Actions pipeline adds dependency and secret scanning ahead of the isolated Compose integration/browser gate. Cloud-specific deployment concerns remain isolated.
+LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API, PostgreSQL system of record, and Redis/Celery worker. Docker Compose defines an eight-service local topology: a one-shot migration/privilege-provisioning job, the application services, and loopback-bound Prometheus and Grafana. The owner credential exists only in the migration job; API and worker use a non-owner runtime role that cannot create schema objects and cannot update, delete, or truncate audit history. SQLAlchemy implements the domain model; nine Alembic revisions provide 22 application tables, revocable authentication sessions, structured evidence, durable jobs, reinforcing constraints, immutable active rule configuration, and an append-only audit trigger. FastAPI validates request envelopes and independently enforces role permissions, explicit host/origin policy, body limits, synthetic-source requirements, Redis-backed fixed-window rate limits, secure headers, and production configuration invariants. Redis transports job identifiers and rate-limit counters while PostgreSQL remains authoritative for durable state. Reconciliation constructs deterministic candidate graphs from a local reference/currency index, retaining the original time predicate and evidence model without the prior Cartesian scan. A versioned 10,000-transaction synthetic generator, algorithm benchmark, and live recovery harness provide repeatable local measurements. API and worker telemetry retains UUID correlation, W3C trace continuity, bounded metrics, and recursively redacted structured logs. Prometheus and Grafana provide the local operations view. The interface preserves money as strings, labels UTC, hides controls by permission, and provides explicit state handling. A four-job GitHub Actions pipeline adds dependency and secret scanning ahead of the isolated Compose integration/browser gate. Cloud-specific deployment concerns remain isolated.
 
 ## Important decisions
 
@@ -94,6 +95,9 @@ LedgerGuard is a modular monolith with a React/TypeScript interface, FastAPI API
 - Enforce fixed-window limits atomically in Redis using HMAC-derived direct-client identifiers. Ignore untrusted forwarding headers; fail open with a redacted event in development/test but fail closed in production when the limiter store is unavailable.
 - Require explicit production hosts, HTTPS browser origins, TLS Redis URLs, a non-placeholder database password, enabled rate limiting, and synthetic-only data. Disable interactive API documentation in production.
 - Run secret scanning plus Python and npm dependency audits locally and in CI; Dependabot proposes weekly Python, npm, Actions, and Docker updates for review rather than changing dependencies silently.
+- Index eligible settlements by exact `(source_reference, currency)` before applying the unchanged UTC time-window predicate. Prove the indexed candidate graph equals an exhaustive reference fixture and retain the full reconciliation regression suite.
+- Keep high-cardinality accepted transaction identifiers out of bounded audit metadata; record the accepted count and a canonical SHA-256 digest of the sorted identifiers instead.
+- Treat local performance figures as workload- and environment-specific observations, not capacity guarantees or SLOs. Preserve raw results outside Git and publish the sample count, method, failure denominator, and limitations.
 
 ## Commands required to run the system
 
@@ -126,6 +130,16 @@ Run the complete local quality suite after installing pinned dependencies:
 ./scripts/validate-day-14.ps1
 ./scripts/validate-day-15.ps1
 ./scripts/validate-day-16.ps1
+./scripts/validate-day-17.ps1
+```
+
+Run the deterministic algorithm benchmark or the full live-stack measurement and recovery drill:
+
+```powershell
+cd backend
+./.venv/Scripts/python.exe -m ledgerguard.performance --samples 5 --warmups 1
+cd ..
+./scripts/run-day-17-live.ps1
 ```
 
 Configuration placeholders are documented in `.env.example`; `.env` must remain untracked.
@@ -156,6 +170,14 @@ npm run test:e2e
 
 ## Test and coverage results
 
+- Day 17 pre/post algorithm measurement: the same 10,000-transaction/8,000-settlement workload produced exactly 8,000 exact and 2,000 missing outcomes. The exhaustive baseline took 10.515329 seconds (950.99 transactions/second). The indexed version's five post-warm-up samples had p50 0.778196 seconds, p95 0.829283 seconds, and p50 throughput 12,850.23 transactions/second: 13.51-fold measured throughput improvement and 92.60% p50 elapsed-time reduction on this workload and host.
+- Day 17 live workload: 20 idempotent submissions of one 2,209,010-byte, 10,000-record synthetic payload had 0 request failures, p50 2,193.137 ms, and p95 2,299.534 ms. After a worker restart, the one durable job succeeded in one attempt in 10.223361 seconds (978.15 accepted transactions/second); PostgreSQL confirmed counts `10000/10000/0/0/0`. The measured worker failure rate was 0% of one bulk job and is not an SLO.
+- Day 17 resilience integration: 11 tests passed in 6.76 seconds against real PostgreSQL, Redis, and Celery, covering database/runtime invariants, worker health/roundtrip, durable retry, duplicate delivery, and post-flush rollback. The final rebuilt-image rerun passed the same 11 tests in 8.00 seconds. The first immediate post-recreate attempt found the worker not ready; after its health check became healthy, the unchanged suite passed. One non-failing container cache-permission warning was emitted.
+- Day 17 recovery drill: the original queued job completed after the worker stopped and restarted; 20 deliveries returned one job; readiness became unavailable while PostgreSQL was stopped; the existing API recovered and queried the job after restart; API, worker, PostgreSQL, Redis, Grafana, and Prometheus finished healthy and the frontend running.
+- Day 17 focused local checks: Ruff and strict mypy passed with no findings across 23 source files; the performance and reconciliation suite passed 14 tests in 4.01 seconds locally and 14 tests in 2.65 seconds in the final development image with the test-only host allowlist. The existing upstream test-client deprecation warning remains.
+- Day 17 complete local quality gate: 201 tests passed and 11 opt-in integration tests skipped in 15.14 seconds. Measured statement coverage was 75% overall (3,430 statements, 845 missed), 64% for the new performance module, 77% for reconciliation, and 97% for ingestion. Ruff formatting/linting, strict mypy, all nine Alembic revisions, Markdown links, the Day 17 validator, and the repository secret scan all passed.
+- Day 17 frontend and dependency gates: ESLint and TypeScript checking passed; 21 Vitest tests passed across seven files in 11.26 seconds; Vite built 22 modules into 191.01 kB JavaScript (57.32 kB gzip) and 16.17 kB CSS (4.17 kB gzip); `npm audit` and `pip-audit` reported no known vulnerabilities. The transitive `zod` package was advanced from 4.6.5 to 4.6.7 to clear `GHSA-mrhx-c7xc-m3w5`.
+- Day 17 assembled-system gate: API, worker, PostgreSQL, Redis, frontend, Prometheus, and Grafana reached healthy/running state, and the frontend returned HTTP 200. A drive-exhausted first export produced a zero-byte Vite package manifest; the corrupted disposable image was detected, removed, rebuilt without cache, verified at 5,081 bytes, and then passed the stack check. All three administrator, analyst, and auditor Playwright journeys passed against installed Chrome in 12.1 seconds.
 - Day 16 backend quality gates: Ruff formatting and linting passed across 50 source/test/migration files; strict mypy found no issues in 22 source files; Alembic rendered all nine revisions offline through `20261016_0009`.
 - Day 16 backend suite: 196 passed and 9 opt-in integration tests skipped in 8.85 seconds with one upstream FastAPI/Starlette test-client deprecation warning. Measured statement coverage was 76% overall (3,319 statements, 806 missed), 97% for configuration, 90% for observability, and 89% for security. These are observations, not security assurance claims or targets.
 - Day 16 dependency and secret gates: `pip-audit` found no known vulnerabilities after upgrading the affected pinned packages and packaging tool; `npm audit --audit-level=high` found 0 vulnerabilities; the repository scanner found no configured private-key or provider-token patterns across 157 tracked or unignored files.
@@ -342,7 +364,7 @@ npm run test:e2e
 - MFA, self-service password reset, and external identity-provider integration are not implemented. Redis-backed login throttling reduces online guessing but is not a substitute for MFA, an edge WAF, or organization-wide identity controls.
 - Prometheus `/metrics` and anonymous Grafana Viewer access are loopback-bound local-development interfaces, not a production ingress policy. Day 19 must require authenticated/private routing and managed retention.
 - The default local trace exporter writes completed spans to structured logs. Set an internal OTLP HTTP collector endpoint for durable distributed-trace storage; no hosted collector was configured or claimed on Day 15.
-- Dashboard panels provide operational visibility but no evidence-based SLO thresholds or paging rules. Day 17 will measure performance before any latency/throughput target is claimed.
+- Dashboard panels provide operational visibility but no approved SLO thresholds or paging rules. Day 17 measurements provide a local baseline only; production targets require representative workload, hardware, concurrency, and stakeholder decisions.
 - The unresolved-case report is intentionally a current-state queue bounded by case creation cutoff; it is not a historical status-as-of reconstruction. A historical snapshot would require replaying case status history and is outside Day 13 scope.
 - Fraud thresholds and scores are deterministic demonstration controls, not validated fraud policy, probability estimates, or claims of detection accuracy.
 - Retention periods are ratified only as a synthetic portfolio baseline; a deploying organization must approve jurisdiction-specific retention, legal-hold, backup-expiry, and deletion procedures. The production queue choice remains a Day 19 decision.
@@ -350,23 +372,25 @@ npm run test:e2e
 - The pinned Starlette test client emits one upstream AnyIO deprecation warning. It does not fail the test suite.
 - Running-job cancellation is cooperative at defined safe checkpoints; work already inside an atomic financial commit is allowed to finish rather than being terminated mid-transaction.
 - The current local Redis/Celery topology is suitable for development. The managed production queue and recovery runbook remain a Day 19 deployment decision.
-- The JSON ingestion envelope accepts at most 10,000 records and CSV uploads remain capped at 2 MB by default. Day 17 will publish controlled throughput and resilience measurements rather than extrapolating from the Day 9 local smoke measurement.
+- The JSON ingestion envelope accepts at most 10,000 records and CSV uploads remain capped at 2 MB by default. The measured 10,000-record JSON payload was 2,209,010 bytes and stayed below the 3 MB request cap; this does not predict other payload shapes or concurrent load.
+- The live performance sample used one bulk worker job and 20 idempotent API submissions on a development laptop. The 0% observed failure rates therefore have small denominators and are not reliability guarantees.
+- Each live benchmark run retains its isolated synthetic account and evidence in the local development database for auditability. Repeated runs consume local storage until the user deliberately recreates or maintains the development volume.
 - The isolated Day 7 settlement facts are loaded by a production-blocked synthetic seeder. A public settlement-ingestion contract is not yet implemented and must exist before production deployment.
 - No manual rendered screenshot was captured for Day 11; interface behaviour was exercised through 17 component tests, a production build, and live API/role checks.
-- Playwright browser binaries are intentionally not part of the repository; local browser journeys require the documented one-time `npx playwright install chromium` download. CI installs Chromium in its isolated runner.
+- Playwright browser binaries are intentionally not part of the repository. Local journeys use the pinned downloaded Chromium by default or the documented `PLAYWRIGHT_CHROMIUM_EXECUTABLE` fallback for an installed Chrome/Chromium; the final Day 17 run used system Chrome because the system drive lacked space for another pinned browser download. CI installs pinned Chromium in its isolated runner.
 - A commit cannot embed its own final Git hash without changing that hash. This file therefore identifies the latest completed daily commit as `HEAD`; the exact short hash is reported after commit and can always be resolved with `git rev-parse --short HEAD`.
 
 ## Blockers
 
-None for Day 16. Automated unit, component, API, PostgreSQL, Redis, Celery, Chromium, container-build, production-build, dependency, secret-pattern, configuration, security-header, privilege, and threat-model verification completed using synthetic data.
+None for Day 17. Algorithm, ingestion, PostgreSQL, Redis, Celery, worker restart, duplicate delivery, atomic rollback, and database reconnection verification completed using synthetic data. No hosted performance environment or production SLO was available or claimed.
 
 ## Notion synchronization
 
-Day 16 Notion synchronization remains explicitly pending. The user has not directly authorized exporting this day's project, security, test, and commit details to a specific Notion destination; this repository record remains authoritative.
+Day 17 Notion synchronization remains explicitly pending. The user has not directly authorized exporting this day's project, performance, resilience, test, and commit details to a specific Notion destination; this repository record remains authoritative.
 
 ## Next day's objective
 
-Day 17 will generate at least 10,000 synthetic transactions with known outcomes; measure throughput, p50/p95 latency, failure rate, and worker time under recorded conditions; test worker restart, duplicate delivery, partial failure, and database reconnection; then optimise one measured bottleneck and publish the before/after evidence honestly.
+Day 18 will add an optional evidence-grounded analyst explanation provider, cite exact stored transaction/rule/reconciliation fields, retain a deterministic fallback, abstain on unsupported evidence, and validate answerable, ambiguous, and unsupported evaluation fixtures without requiring a paid credential.
 
 ## Latest commit hash
 

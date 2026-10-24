@@ -192,6 +192,40 @@ def _is_candidate(
     )
 
 
+def _candidate_edges(
+    transactions: list[TransactionFact],
+    settlements: list[SettlementFact],
+    window: timedelta,
+) -> tuple[dict[UUID, tuple[UUID, ...]], dict[UUID, tuple[UUID, ...]]]:
+    """Build deterministic candidate edges without a Cartesian product."""
+
+    mutable_transaction_edges: dict[UUID, list[UUID]] = defaultdict(list)
+    mutable_settlement_edges: dict[UUID, list[UUID]] = defaultdict(list)
+    settlements_by_match_key: dict[tuple[str, str], list[SettlementFact]] = defaultdict(list)
+    for settlement in settlements:
+        settlements_by_match_key[(settlement.source_reference, settlement.currency)].append(
+            settlement
+        )
+    for transaction in transactions:
+        for settlement in settlements_by_match_key[
+            (transaction.source_reference, transaction.currency)
+        ]:
+            if _is_candidate(transaction, settlement, window):
+                mutable_transaction_edges[transaction.id].append(settlement.id)
+                mutable_settlement_edges[settlement.id].append(transaction.id)
+
+    return (
+        {
+            fact.id: tuple(sorted(mutable_transaction_edges[fact.id], key=str))
+            for fact in transactions
+        },
+        {
+            fact.id: tuple(sorted(mutable_settlement_edges[fact.id], key=str))
+            for fact in settlements
+        },
+    )
+
+
 def _classification_for_component(
     transactions: tuple[TransactionFact, ...],
     settlements: tuple[SettlementFact, ...],
@@ -257,22 +291,9 @@ def build_reconciliation_decisions(
     transactions_by_id = {item.id: item for item in ordered_transactions}
     settlements_by_id = {item.id: item for item in ordered_settlements}
 
-    mutable_transaction_edges: dict[UUID, list[UUID]] = defaultdict(list)
-    mutable_settlement_edges: dict[UUID, list[UUID]] = defaultdict(list)
-    for transaction in ordered_transactions:
-        for settlement in ordered_settlements:
-            if _is_candidate(transaction, settlement, window):
-                mutable_transaction_edges[transaction.id].append(settlement.id)
-                mutable_settlement_edges[settlement.id].append(transaction.id)
-
-    transaction_edges = {
-        fact.id: tuple(sorted(mutable_transaction_edges[fact.id], key=str))
-        for fact in ordered_transactions
-    }
-    settlement_edges = {
-        fact.id: tuple(sorted(mutable_settlement_edges[fact.id], key=str))
-        for fact in ordered_settlements
-    }
+    transaction_edges, settlement_edges = _candidate_edges(
+        ordered_transactions, ordered_settlements, window
+    )
 
     unvisited_transactions = set(transactions_by_id)
     unvisited_settlements = set(settlements_by_id)

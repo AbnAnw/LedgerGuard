@@ -650,7 +650,10 @@ def ingest_transactions(
             metadata={
                 "schema_version": "audit-v1",
                 "source_system": metadata.source_system,
-                "transaction_ids": [str(item.id) for item in financial_facts],
+                "accepted_transaction_count": len(financial_facts),
+                "accepted_transaction_ids_sha256": canonical_sha256(
+                    sorted(str(item.id) for item in financial_facts)
+                ),
             },
         )
         db.commit()

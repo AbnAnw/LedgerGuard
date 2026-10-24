@@ -169,6 +169,9 @@ Playwright tests `http://localhost:5173` because that origin matches the local C
 suite covers administrator, operations analyst, and auditor navigation and control visibility.
 Generated traces, screenshots, reports, and browser binaries are ignored by Git. See the
 [automated test strategy](../architecture/TEST_STRATEGY.md) for the risk matrix and CI topology.
+When the pinned browser cannot be downloaded, an existing compatible Chromium installation can be
+selected explicitly for local verification with `PLAYWRIGHT_CHROMIUM_EXECUTABLE`; CI continues to
+install the pinned Playwright browser.
 
 ## Migration and seed commands
 
@@ -253,3 +256,26 @@ failures, job states, ingestion outcomes, and reconciliation outcomes. Processin
 database-authoritative gauges so they remain coherent across API and worker restarts. See the
 [observability contract](../architecture/OBSERVABILITY.md) for label limits, trace propagation,
 the synthetic failure drill, and privacy rules.
+
+## Performance and resilience verification
+
+Run the pure deterministic 10,000-transaction reconciliation benchmark from `backend/`:
+
+```powershell
+./.venv/Scripts/python.exe -m ledgerguard.performance --samples 5 --warmups 1 `
+  --output ../tmp/day17-algorithm.json
+```
+
+With the complete Compose stack healthy and synthetic users seeded, run the live workload and
+recovery drill from the repository root:
+
+```powershell
+./scripts/run-day-17-live.ps1
+```
+
+The script creates a uniquely named synthetic performance account, submits one 10,000-record job
+through repeated idempotent API deliveries while the worker is stopped, starts the worker, waits
+for completion, restarts PostgreSQL, and verifies the existing API process reconnects. It restores
+stopped services in `finally` and writes untracked raw results under `tmp/`. The checked-in
+[performance protocol](PERFORMANCE_AND_RESILIENCE.md) defines the method, published measurement,
+and non-claims.

@@ -6,11 +6,11 @@ The project uses synthetic demonstration data only. It must not contain real fin
 
 ## Current state
 
-Day 16 is complete: the security review now documents trust boundaries, threats, retention,
-repairs, and residual risks. The API enforces host, body-size, secure-header, synthetic-source, and
-Redis-backed request-rate controls; logs receive wider key/value redaction; and Compose separates
-the schema-owning migration identity from the non-owner API/worker database role. CI now performs
-Python and npm dependency audits plus a tracked-file credential-pattern scan.
+Day 17 is complete: LedgerGuard now includes a deterministic 10,000-transaction workload,
+reproducible algorithm and live-stack benchmarks, and worker restart, duplicate delivery, partial
+failure, and database reconnection drills. Reconciliation candidate construction uses a verified
+reference/currency index instead of a Cartesian scan, with the measured local results and their
+limits published in the performance runbook.
 
 ## Users and least privilege
 
@@ -37,6 +37,9 @@ Authorization will be enforced by the API as the security boundary and mirrored 
 See [the product specification](docs/PRODUCT_SPEC.md), [the architecture overview](docs/architecture/OVERVIEW.md), and [the complete roadmap](PROJECT_PLAN.md).
 
 The detailed [domain/data model](docs/architecture/DATA_MODEL.md), [entity-relationship diagram](docs/architecture/ERD.md), [authentication/access design](docs/security/AUTHENTICATION_AND_ACCESS.md), [security and privacy review](docs/security/SECURITY_AND_PRIVACY.md), [transaction ingestion schema](docs/api/TRANSACTION_INGESTION_V1.md), [idempotency/data-quality contract](docs/api/IDEMPOTENCY_AND_DATA_QUALITY.md), [reconciliation contract](docs/api/RECONCILIATION_V1.md), [background-processing contract](docs/architecture/BACKGROUND_PROCESSING.md), [case-management contract](docs/architecture/CASE_MANAGEMENT.md), [audit-logging contract](docs/architecture/AUDIT_LOGGING.md), [reporting/export contract](docs/architecture/REPORTING_AND_EXPORT.md), [automated test strategy](docs/architecture/TEST_STRATEGY.md), [observability contract](docs/architecture/OBSERVABILITY.md), [analyst dashboard contract](docs/ui/ANALYST_DASHBOARD.md), and architecture decision records under `docs/decisions/` define the current contracts.
+
+The [performance and resilience protocol](docs/operations/PERFORMANCE_AND_RESILIENCE.md)
+publishes the Day 17 workload, measurement method, recovery drills, results, and limitations.
 
 ## Repository map
 
@@ -89,6 +92,16 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+Run the deterministic algorithm benchmark without services, or the full local measurement and
+recovery drill against the healthy Compose stack:
+
+```powershell
+cd backend
+./.venv/Scripts/python.exe -m ledgerguard.performance --samples 5 --warmups 1
+cd ..
+./scripts/run-day-17-live.ps1
+```
+
 See [local development](docs/operations/LOCAL_DEVELOPMENT.md) for service, migration, health, configuration, and shutdown details. `.env` is optional for the safe local defaults and must never be committed.
 
 After signing in as the synthetic analyst, submit either published fixture under `sample-data/` to the matching `/api/v1/ingestion/transactions/json` or `/api/v1/ingestion/transactions/csv` endpoint. The [version 1 ingestion contract](docs/api/TRANSACTION_INGESTION_V1.md) documents exact fields, outcomes, and stable rejection codes.
@@ -135,6 +148,7 @@ After the seed and first reconciliation run, sign in through `http://localhost:5
 - `docs/architecture/REPORTING_AND_EXPORT.md` — UTC report scope, independent total verification, fixed CSV fields, and spreadsheet safety
 - `docs/architecture/TEST_STRATEGY.md` — risk matrix, test layers, role journeys, CI isolation, and acceptance gates
 - `docs/architecture/OBSERVABILITY.md` — log, correlation, metric, trace, health, dashboard, and failure-drill contracts
+- `docs/operations/PERFORMANCE_AND_RESILIENCE.md` — synthetic workload, measurement method, results, resilience drills, and limitations
 - `docs/ui/ANALYST_DASHBOARD.md` — dashboard metrics, states, role behaviour, prioritisation, and acceptance matrix
 
 ## License and usage
